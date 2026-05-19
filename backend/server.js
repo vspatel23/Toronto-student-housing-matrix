@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
+const preferenceRoutes = require("./routes/preferences");
 
 const app = express();
 
@@ -10,6 +11,8 @@ connectDB();
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/api/preferences", preferenceRoutes);
 
 app.get("/", (req, res) => {
   res.json({
