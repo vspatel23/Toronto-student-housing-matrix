@@ -5,7 +5,6 @@ const savedPreferenceSchema = new mongoose.Schema(
     sessionId: {
       type: String,
       required: true,
-      index: true,
       trim: true,
     },
     campus: {
@@ -37,5 +36,14 @@ const savedPreferenceSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+// Indexes support anonymous-session lookups and future search filtering.
+savedPreferenceSchema.index({ sessionId: 1, createdAt: -1 });
+savedPreferenceSchema.index({ campus: 1 });
+savedPreferenceSchema.index({ campus: 1, housingType: 1 });
+savedPreferenceSchema.index({ campus: 1, maxRent: 1 });
+savedPreferenceSchema.index({ campus: 1, maxCommute: 1 });
+savedPreferenceSchema.index({ campus: 1, safetyLevel: 1 });
+savedPreferenceSchema.index({ createdAt: -1 });
 
 module.exports = mongoose.model("SavedPreference", savedPreferenceSchema);
