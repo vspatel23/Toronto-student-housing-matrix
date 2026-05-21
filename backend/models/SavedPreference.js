@@ -7,43 +7,50 @@ const savedPreferenceSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
-    campus: {
-      type: String,
-      trim: true,
+    selectedCampusId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Campus",
     },
+    maxBudget: Number,
     housingType: {
       type: String,
-      trim: true,
+      enum: ["Apartment", "Room", "Studio", "Condo", "House"],
     },
-    minRent: Number,
-    maxRent: Number,
     maxCommute: Number,
-    safetyLevel: {
+    minimumSafetyLevel: {
       type: String,
-      enum: ["Any", "Medium+", "High Only"],
-      default: "Any",
+      enum: ["Low", "Medium", "High"],
     },
-    amenities: {
-      type: [String],
-      default: [],
+    weights: {
+      rent:      { type: Number, default: 40 },
+      commute:   { type: Number, default: 30 },
+      safety:    { type: Number, default: 20 },
+      amenities: { type: Number, default: 10 },
     },
-    notes: {
-      type: String,
-      trim: true,
-    },
+    favorites: [
+      {
+        listingId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "HousingListing",
+        },
+        savedAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
+    compareList: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "HousingListing",
+      },
+    ],
   },
   {
     timestamps: true,
-  },
+  }
 );
 
-// Indexes support anonymous-session lookups and future search filtering.
-savedPreferenceSchema.index({ sessionId: 1, createdAt: -1 });
-savedPreferenceSchema.index({ campus: 1 });
-savedPreferenceSchema.index({ campus: 1, housingType: 1 });
-savedPreferenceSchema.index({ campus: 1, maxRent: 1 });
-savedPreferenceSchema.index({ campus: 1, maxCommute: 1 });
-savedPreferenceSchema.index({ campus: 1, safetyLevel: 1 });
-savedPreferenceSchema.index({ createdAt: -1 });
+savedPreferenceSchema.index({ sessionId: 1 });
 
 module.exports = mongoose.model("SavedPreference", savedPreferenceSchema);

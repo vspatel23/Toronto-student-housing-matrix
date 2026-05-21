@@ -6,31 +6,63 @@ const housingListingSchema = new mongoose.Schema(
       type: String,
       trim: true,
     },
-    campus: {
+    address: {
       type: String,
       trim: true,
     },
-    housingType: {
+    neighborhood: {
       type: String,
       trim: true,
     },
-    rent: Number,
-    commuteMinutes: Number,
-    safetyLevel: {
-      type: String,
-      enum: ["Any", "Medium+", "High Only"],
-    },
-    neighbourhood: {
+    postalCode: {
       type: String,
       trim: true,
     },
+    monthlyRent: {
+      type: Number,
+    },
+    propertyType: {
+      type: String,
+      enum: ["Apartment", "Room", "Studio", "Condo", "House"],
+      trim: true,
+    },
+    bedrooms: Number,
+    bathrooms: Number,
+    furnished: {
+      type: Boolean,
+      default: false,
+    },
+    location: {
+      lat: Number,
+      lng: Number,
+    },
+    safety: {
+      safetyScore: Number,
+      crimeRateLevel: {
+        type: String,
+        enum: ["Low", "Medium", "High"],
+      },
+      crimeRatePer1000: Number,
+      dataSource: {
+        type: String,
+        default: "TPS Open Data",
+      },
+    },
+    transitStops: [
+      {
+        stopName: String,
+        walkMinutes: Number,
+      },
+    ],
     amenities: {
       type: [String],
       default: [],
     },
     valueScore: Number,
-    latitude: Number,
-    longitude: Number,
+    source: {
+      type: String,
+      trim: true,
+    },
     isActive: {
       type: Boolean,
       default: true,
@@ -38,15 +70,14 @@ const housingListingSchema = new mongoose.Schema(
   },
   {
     timestamps: true,
-  },
+  }
 );
 
-// Indexes prepare listing searches by campus, filters, and ranking.
-housingListingSchema.index({ campus: 1, rent: 1 });
-housingListingSchema.index({ campus: 1, commuteMinutes: 1 });
-housingListingSchema.index({ campus: 1, safetyLevel: 1 });
-housingListingSchema.index({ housingType: 1 });
+housingListingSchema.index({ monthlyRent: 1 });
+housingListingSchema.index({ propertyType: 1 });
+housingListingSchema.index({ "safety.crimeRateLevel": 1 });
 housingListingSchema.index({ valueScore: -1 });
-housingListingSchema.index({ isActive: 1, campus: 1 });
+housingListingSchema.index({ isActive: 1 });
+housingListingSchema.index({ "location.lat": 1, "location.lng": 1 });
 
 module.exports = mongoose.model("HousingListing", housingListingSchema);

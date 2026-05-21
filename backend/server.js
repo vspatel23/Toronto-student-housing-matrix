@@ -4,6 +4,7 @@ require("dotenv").config();
 
 const connectDB = require("./config/db");
 const preferenceRoutes = require("./routes/preferences");
+const listingsRoutes = require("./routes/listings");      // make sure this line exists
 
 const app = express();
 
@@ -13,6 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 app.use("/api/preferences", preferenceRoutes);
+app.use("/api/listings", listingsRoutes);                 // and this one
 
 app.get("/", (req, res) => {
   res.json({
