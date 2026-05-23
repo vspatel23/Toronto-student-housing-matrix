@@ -2,6 +2,18 @@ const express = require("express");
 const router = express.Router();
 const HousingListing = require("../models/HousingListing");
 
+const propertyTypeMap = {
+  "All types": null,
+  "Shared House": "Room",
+  "Room Rental": "Room",
+  Basement: "House",
+};
+
+const safetyLevelMap = {
+  "Medium+": ["Low", "Medium"],
+  "High Only": ["Low"],
+};
+
 // GET /api/listings
 // Query params: minRent, maxRent, propertyType
 router.get("/", async (req, res) => {
@@ -15,11 +27,20 @@ router.get("/", async (req, res) => {
     }
 
     if (req.query.propertyType) {
-      filter.propertyType = req.query.propertyType;
+      const propertyType =
+        propertyTypeMap[req.query.propertyType] ?? req.query.propertyType;
+
+      if (propertyType) {
+        filter.propertyType = propertyType;
+      }
     }
 
     if (req.query.safetyLevel) {
-      filter["safety.crimeRateLevel"] = req.query.safetyLevel;
+      const crimeRateLevels = safetyLevelMap[req.query.safetyLevel];
+
+      if (crimeRateLevels) {
+        filter["safety.crimeRateLevel"] = { $in: crimeRateLevels };
+      }
     }
 
     const listings = await HousingListing.find(filter)

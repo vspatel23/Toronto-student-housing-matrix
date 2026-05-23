@@ -375,7 +375,8 @@ output {
 }
 
 .summary-panel,
-.saved-list {
+.saved-list,
+.results-panel {
   margin-top: 22px;
   padding: 18px;
   text-align: left;
@@ -386,6 +387,7 @@ output {
 
 .summary-panel h3,
 .saved-list h3,
+.results-panel h3,
 .help-card h3 {
   margin: 0 0 8px;
   color: #111827;
@@ -401,11 +403,46 @@ output {
   gap: 12px;
 }
 
-.saved-item {
+.saved-item,
+.result-item {
   padding: 14px;
   background: #ffffff;
   border: 1px solid #e8ecf3;
   border-radius: 9px;
+}
+
+.results-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.result-item {
+  display: grid;
+  gap: 8px;
+}
+
+.result-item div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.result-item strong,
+.result-item span,
+.result-item small {
+  display: block;
+}
+
+.result-item span,
+.result-item small,
+.empty-results {
+  color: #6b7280;
+}
+
+.result-item p,
+.empty-results {
+  margin: 0;
 }
 
 .saved-item strong,
@@ -538,5 +575,9 @@ output {
 
   .link-button {
     margin-left: 0;
+  }
+
+  .result-item div {
+    display: grid;
   }
 }

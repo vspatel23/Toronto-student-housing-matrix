@@ -11,15 +11,44 @@ const savedPreferenceSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Campus",
     },
+    campus: {
+      type: String,
+      trim: true,
+    },
+    minRent: Number,
+    maxRent: Number,
     maxBudget: Number,
     housingType: {
       type: String,
-      enum: ["Apartment", "Room", "Studio", "Condo", "House"],
+      enum: [
+        "All types",
+        "Apartment",
+        "Shared House",
+        "Studio",
+        "Basement",
+        "Room Rental",
+        "Room",
+        "Condo",
+        "House",
+      ],
     },
     maxCommute: Number,
+    safetyLevel: {
+      type: String,
+      enum: ["Any", "Medium+", "High Only"],
+      default: "Any",
+    },
     minimumSafetyLevel: {
       type: String,
       enum: ["Low", "Medium", "High"],
+    },
+    amenities: {
+      type: [String],
+      default: [],
+    },
+    notes: {
+      type: String,
+      trim: true,
     },
     weights: {
       rent:      { type: Number, default: 40 },

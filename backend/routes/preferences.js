@@ -95,6 +95,72 @@ router.post("/", async (req, res) => {
   }
 });
 
+router.put("/:sessionId", async (req, res) => {
+  try {
+    const errors = [];
+    const minRent = toOptionalNumber(req.body.minRent, "minRent", errors);
+    const maxRent = toOptionalNumber(req.body.maxRent, "maxRent", errors);
+    const maxCommute = toOptionalNumber(
+      req.body.maxCommute,
+      "maxCommute",
+      errors,
+    );
+    const safetyLevel = req.body.safetyLevel || "Any";
+
+    if (
+      minRent !== undefined &&
+      maxRent !== undefined &&
+      maxRent < minRent
+    ) {
+      errors.push("maxRent should not be below minRent");
+    }
+
+    if (!SAFETY_LEVELS.includes(safetyLevel)) {
+      errors.push("safetyLevel should be one of: Any, Medium+, High Only");
+    }
+
+    if (errors.length > 0) {
+      return res.status(400).json({
+        success: false,
+        errors,
+      });
+    }
+
+    const preference = await SavedPreference.findOneAndUpdate(
+      { sessionId: req.params.sessionId },
+      {
+        sessionId: req.params.sessionId,
+        campus: req.body.campus,
+        housingType: req.body.housingType,
+        minRent,
+        maxRent,
+        maxCommute,
+        safetyLevel,
+        amenities: normalizeAmenities(req.body.amenities),
+        notes: req.body.notes,
+      },
+      {
+        returnDocument: "after",
+        runValidators: true,
+        sort: { createdAt: -1 },
+        upsert: true,
+      },
+    );
+
+    return res.json({
+      success: true,
+      sessionId: req.params.sessionId,
+      preference,
+    });
+  } catch (error) {
+    console.error("Failed to update preference:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while updating preferences",
+    });
+  }
+});
+
 router.get("/:sessionId", async (req, res) => {
   try {
     const preferences = await SavedPreference.find({

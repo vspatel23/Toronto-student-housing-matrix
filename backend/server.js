@@ -4,17 +4,29 @@ require("dotenv").config();
 
 const connectDB = require("./config/db");
 const preferenceRoutes = require("./routes/preferences");
-const listingsRoutes = require("./routes/listings");      // make sure this line exists
+const listingsRoutes = require("./routes/listings");
+const campusRoutes = require("./routes/campuses");
 
 const app = express();
 
 connectDB();
 
-app.use(cors());
+app.use(
+  cors({
+    origin: [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:3000",
+      "http://127.0.0.1:3000",
+    ],
+    credentials: true,
+  }),
+);
 app.use(express.json());
 
 app.use("/api/preferences", preferenceRoutes);
-app.use("/api/listings", listingsRoutes);                 // and this one
+app.use("/api/listings", listingsRoutes);
+app.use("/api/campuses", campusRoutes);
 
 app.get("/", (req, res) => {
   res.json({

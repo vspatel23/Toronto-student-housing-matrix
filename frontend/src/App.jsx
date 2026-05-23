@@ -72,6 +72,68 @@ const formatDate = (dateValue) =>
     timeStyle: "short",
   }).format(new Date(dateValue));
 
+const buildApiUrl = (path, params = {}) => {
+  const url = new URL(path, API_BASE_URL);
+
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+
+  return url.toString();
+};
+
+const getBackendMessage = (data) => {
+  if (!data) {
+    return "";
+  }
+
+  if (Array.isArray(data.errors) && data.errors.length > 0) {
+    return data.errors.join(", ");
+  }
+
+  return data.message || data.error || "";
+};
+
+const apiRequest = async (path, options = {}, params = {}) => {
+  const url = buildApiUrl(path, params);
+
+  let response;
+  try {
+    response = await fetch(url, options);
+  } catch (error) {
+    throw new Error(`API request failed: ${url}. ${error.message}`, {
+      cause: error,
+    });
+  }
+
+  const text = await response.text();
+  let data = null;
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      throw new Error(
+        `API request failed: ${url}. HTTP ${response.status} - backend returned a non-JSON response.`,
+        { cause: error },
+      );
+    }
+  }
+
+  if (!response.ok) {
+    const backendMessage = getBackendMessage(data);
+    throw new Error(
+      `API request failed: ${url}. HTTP ${response.status}${
+        backendMessage ? ` - ${backendMessage}` : ""
+      }`,
+    );
+  }
+
+  return data;
+};
+
 function App() {
   const [sessionId, setSessionId] = useState(() => getStoredSessionId());
   const [formData, setFormData] = useState({
@@ -87,6 +149,8 @@ function App() {
   const [status, setStatus] = useState({ type: "", message: "" });
   const [savedPreference, setSavedPreference] = useState(null);
   const [savedPreferences, setSavedPreferences] = useState([]);
+  const [listings, setListings] = useState([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
 
@@ -135,7 +199,7 @@ function App() {
     setStatus({ type: "", message: "" });
 
     try {
-      const response = await fetch(`${API_BASE_URL}/api/preferences`, {
+      const preferenceData = await apiRequest("/api/preferences", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -146,26 +210,31 @@ function App() {
         }),
       });
 
-      const data = await response.json();
+      const listingData = await apiRequest("/api/listings", {}, {
+        minRent: formData.minRent,
+        maxRent: formData.maxRent,
+        propertyType:
+          formData.housingType === "All types" ? "" : formData.housingType,
+        safetyLevel: formData.safetyLevel === "Any" ? "" : formData.safetyLevel,
+      });
 
-      if (!response.ok) {
-        throw new Error(
-          data.errors?.join(", ") ||
-            data.message ||
-            "Could not save preferences.",
-        );
-      }
-
-      localStorage.setItem(SESSION_KEY, data.sessionId);
-      setSessionId(data.sessionId);
-      setSavedPreference(data.preference);
+      localStorage.setItem(SESSION_KEY, preferenceData.sessionId);
+      setSessionId(preferenceData.sessionId);
+      setSavedPreference(preferenceData.preference);
       setSavedPreferences((currentPreferences) => [
-        data.preference,
+        preferenceData.preference,
         ...currentPreferences,
       ]);
+      setListings(listingData.listings || []);
+      setHasSearched(true);
       setStatus({
         type: "success",
-        message: "Search preferences saved for this anonymous session.",
+        message:
+          listingData.count > 0
+            ? `Found ${listingData.count} housing listing${
+                listingData.count === 1 ? "" : "s"
+              } and saved your preferences.`
+            : "No matching listings found. Your search preferences were saved.",
       });
     } catch (error) {
       setStatus({
@@ -186,19 +255,33 @@ function App() {
     setStatus({ type: "", message: "" });
 
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/preferences/${sessionId}`,
-      );
-      const data = await response.json();
+      const data = await apiRequest(`/api/preferences/${sessionId}`);
+      const preferences = data.preferences || [];
+      const latestPreference = preferences[0];
 
-      if (!response.ok) {
-        throw new Error(data.message || "Could not load saved preferences.");
+      setSavedPreferences(preferences);
+      setSavedPreference(latestPreference || null);
+
+      if (latestPreference) {
+        setFormData((currentData) => ({
+          ...currentData,
+          campus: latestPreference.campus || currentData.campus,
+          housingType: latestPreference.housingType || currentData.housingType,
+          minRent: latestPreference.minRent ?? currentData.minRent,
+          maxRent: latestPreference.maxRent ?? currentData.maxRent,
+          maxCommute: latestPreference.maxCommute ?? currentData.maxCommute,
+          safetyLevel: latestPreference.safetyLevel || currentData.safetyLevel,
+          amenities: latestPreference.amenities || currentData.amenities,
+          notes: latestPreference.notes || currentData.notes,
+        }));
       }
 
-      setSavedPreferences(data.preferences || []);
       setStatus({
-        type: "success",
-        message: "Loaded saved preferences for this session.",
+        type: preferences.length > 0 ? "success" : "error",
+        message:
+          preferences.length > 0
+            ? "Loaded saved preferences for this session."
+            : "No saved preferences found for this session.",
       });
     } catch (error) {
       setStatus({
@@ -417,6 +500,39 @@ function App() {
               {savedPreference.minRent}-${savedPreference.maxRent} · Up to{" "}
               {savedPreference.maxCommute} min · {savedPreference.safetyLevel}
             </p>
+          </section>
+        )}
+
+        {hasSearched && (
+          <section className="results-panel" aria-label="Housing results">
+            <h3>Housing Results</h3>
+            {listings.length > 0 ? (
+              <div className="results-grid">
+                {listings.map((listing) => (
+                  <article key={listing._id} className="result-item">
+                    <div>
+                      <strong>{listing.title || "Untitled listing"}</strong>
+                      <span>
+                        {listing.neighborhood || listing.address || "Toronto"}
+                      </span>
+                    </div>
+                    <p>
+                      ${listing.monthlyRent || "N/A"} ·{" "}
+                      {listing.propertyType || "Housing"} ·{" "}
+                      {listing.furnished ? "Furnished" : "Unfurnished"}
+                    </p>
+                    <small>
+                      Safety: {listing.safety?.crimeRateLevel || "Unknown"} ·
+                      Value score: {listing.valueScore || "N/A"}
+                    </small>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-results">
+                No listings match these filters yet.
+              </p>
+            )}
           </section>
         )}
 
