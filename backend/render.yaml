@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: toronto-student-housing-matrix-api
+    runtime: node
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: MONGO_URI
+        sync: false
+      - key: PORT
+        sync: false
