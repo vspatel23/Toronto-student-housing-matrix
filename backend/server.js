@@ -3,6 +3,7 @@ const cors = require("cors");
 require("dotenv").config();
 
 const connectDB = require("./config/db");
+const authRoutes = require("./routes/auth");
 const preferenceRoutes = require("./routes/preferences");
 const listingsRoutes = require("./routes/listings");
 const campusRoutes = require("./routes/campuses");
@@ -24,6 +25,7 @@ app.use(
 );
 app.use(express.json());
 
+app.use("/api/auth", authRoutes);
 app.use("/api/preferences", preferenceRoutes);
 app.use("/api/listings", listingsRoutes);
 app.use("/api/campuses", campusRoutes);
