@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import "./App.css";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5001";
 const SESSION_KEY = "tshm_session_id";
+const AUTH_TOKEN_KEY = "tshm_auth_token";
+const AUTH_USER_KEY = "tshm_auth_user";
 
 const campuses = [
   "University of Toronto -- St. George",
@@ -66,6 +68,26 @@ const getStoredSessionId = () => {
   return newSessionId;
 };
 
+const getStoredAuthUser = () => {
+  const storedUser = localStorage.getItem(AUTH_USER_KEY);
+
+  if (!storedUser) {
+    return null;
+  }
+
+  try {
+    return JSON.parse(storedUser);
+  } catch {
+    localStorage.removeItem(AUTH_USER_KEY);
+    return null;
+  }
+};
+
+const clearAuthStorage = () => {
+  localStorage.removeItem(AUTH_TOKEN_KEY);
+  localStorage.removeItem(AUTH_USER_KEY);
+};
+
 const formatDate = (dateValue) =>
   new Intl.DateTimeFormat("en-CA", {
     dateStyle: "medium",
@@ -95,6 +117,8 @@ const getBackendMessage = (data) => {
 
   return data.message || data.error || "";
 };
+
+const isValidEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 
 const apiRequest = async (path, options = {}, params = {}) => {
   const url = buildApiUrl(path, params);
@@ -136,6 +160,20 @@ const apiRequest = async (path, options = {}, params = {}) => {
 
 function App() {
   const [sessionId, setSessionId] = useState(() => getStoredSessionId());
+  const [authMode, setAuthMode] = useState("login");
+  const [authForm, setAuthForm] = useState({
+    name: "",
+    email: "",
+    password: "",
+  });
+  const [authUser, setAuthUser] = useState(() =>
+    localStorage.getItem(AUTH_TOKEN_KEY) ? getStoredAuthUser() : null,
+  );
+  const [authStatus, setAuthStatus] = useState({ type: "", message: "" });
+  const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
+  const [isAuthChecking, setIsAuthChecking] = useState(() =>
+    Boolean(localStorage.getItem(AUTH_TOKEN_KEY)),
+  );
   const [formData, setFormData] = useState({
     campus: "",
     housingType: "All types",
@@ -153,6 +191,151 @@ function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
+
+  useEffect(() => {
+    const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
+
+    if (!storedToken) {
+      localStorage.removeItem(AUTH_USER_KEY);
+      return;
+    }
+
+    let isMounted = true;
+
+    const verifyCurrentUser = async () => {
+      setIsAuthChecking(true);
+
+      try {
+        const data = await apiRequest("/api/auth/me", {
+          headers: {
+            Authorization: `Bearer ${storedToken}`,
+          },
+        });
+
+        if (!isMounted) {
+          return;
+        }
+
+        localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+        setAuthUser(data.user);
+        setAuthStatus({ type: "", message: "" });
+      } catch {
+        if (!isMounted) {
+          return;
+        }
+
+        clearAuthStorage();
+        setAuthUser(null);
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+      } finally {
+        if (isMounted) {
+          setIsAuthChecking(false);
+        }
+      }
+    };
+
+    verifyCurrentUser();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const updateAuthField = (field, value) => {
+    setAuthStatus({ type: "", message: "" });
+    setAuthForm((currentForm) => ({
+      ...currentForm,
+      [field]: value,
+    }));
+  };
+
+  const handleAuthModeChange = (nextMode) => {
+    setAuthMode(nextMode);
+    setAuthStatus({ type: "", message: "" });
+  };
+
+  const handleAuthSubmit = async (event) => {
+    event.preventDefault();
+
+    const name = authForm.name.trim();
+    const email = authForm.email.trim().toLowerCase();
+    const password = authForm.password;
+
+    if (authMode === "register" && !name) {
+      setAuthStatus({ type: "error", message: "Name is required." });
+      return;
+    }
+
+    if (!email || !password) {
+      setAuthStatus({
+        type: "error",
+        message: "Email and password are required.",
+      });
+      return;
+    }
+
+    if (!isValidEmail(email)) {
+      setAuthStatus({
+        type: "error",
+        message: "Please enter a valid email address.",
+      });
+      return;
+    }
+
+    if (password.length < 6) {
+      setAuthStatus({
+        type: "error",
+        message: "Password must be at least 6 characters long.",
+      });
+      return;
+    }
+
+    setIsAuthSubmitting(true);
+    setAuthStatus({ type: "", message: "" });
+
+    try {
+      const data = await apiRequest(`/api/auth/${authMode}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(
+          authMode === "register"
+            ? { name, email, password }
+            : { email, password },
+        ),
+      });
+
+      localStorage.setItem(AUTH_TOKEN_KEY, data.token);
+      localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+      setAuthUser(data.user);
+      setAuthForm({ name: "", email: "", password: "" });
+      setAuthStatus({
+        type: "success",
+        message:
+          authMode === "register"
+            ? "Registration successful. You are logged in."
+            : "Login successful.",
+      });
+    } catch (error) {
+      setAuthStatus({
+        type: "error",
+        message: error.message,
+      });
+    } finally {
+      setIsAuthSubmitting(false);
+    }
+  };
+
+  const handleLogout = () => {
+    clearAuthStorage();
+    setAuthUser(null);
+    setAuthForm({ name: "", email: "", password: "" });
+    setAuthStatus({ type: "success", message: "You have logged out." });
+  };
 
   const updateField = (field, value) => {
     setStatus({ type: "", message: "" });
@@ -293,6 +476,116 @@ function App() {
     }
   };
 
+  if (isAuthChecking) {
+    return (
+      <main className="auth-page">
+        <div className="auth-loading">Loading...</div>
+      </main>
+    );
+  }
+
+  if (!authUser) {
+    return (
+      <main className="auth-page">
+        <section className="auth-card" aria-labelledby="auth-title">
+          <div className="auth-brand">
+            <div className="home-mark" aria-hidden="true">
+              ⌂
+            </div>
+            <span>Toronto Student Housing Matrix</span>
+          </div>
+
+          <div className="auth-heading">
+            <h1 id="auth-title">
+              {authMode === "register" ? "Create Account" : "Log In"}
+            </h1>
+            <p>
+              {authMode === "register"
+                ? "Create an account to continue to the housing dashboard."
+                : "Log in to continue to the housing dashboard."}
+            </p>
+          </div>
+
+          <form className="auth-form" onSubmit={handleAuthSubmit}>
+            {authMode === "register" && (
+              <label>
+                <span>Name</span>
+                <input
+                  type="text"
+                  autoComplete="name"
+                  value={authForm.name}
+                  onChange={(event) =>
+                    updateAuthField("name", event.target.value)
+                  }
+                />
+              </label>
+            )}
+
+            <label>
+              <span>Email</span>
+              <input
+                type="email"
+                autoComplete="email"
+                value={authForm.email}
+                onChange={(event) =>
+                  updateAuthField("email", event.target.value)
+                }
+              />
+            </label>
+
+            <label>
+              <span>Password</span>
+              <input
+                type="password"
+                autoComplete={
+                  authMode === "register" ? "new-password" : "current-password"
+                }
+                value={authForm.password}
+                onChange={(event) =>
+                  updateAuthField("password", event.target.value)
+                }
+              />
+            </label>
+
+            {authStatus.message && (
+              <div className={`status-message ${authStatus.type}`} role="status">
+                {authStatus.message}
+              </div>
+            )}
+
+            <button
+              className="auth-submit-button"
+              type="submit"
+              disabled={isAuthSubmitting}
+            >
+              {isAuthSubmitting
+                ? "Submitting..."
+                : authMode === "register"
+                  ? "Create Account"
+                  : "Log In"}
+            </button>
+          </form>
+
+          <p className="auth-switch">
+            {authMode === "register"
+              ? "Already have an account?"
+              : "Need an account?"}
+            <button
+              type="button"
+              onClick={() =>
+                handleAuthModeChange(
+                  authMode === "register" ? "login" : "register",
+                )
+              }
+            >
+              {authMode === "register" ? "Log In" : "Register"}
+            </button>
+          </p>
+        </section>
+      </main>
+    );
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -302,7 +595,15 @@ function App() {
           </div>
           <span>Toronto Student Housing Matrix</span>
         </div>
-        <p>Academic Decision-Support System</p>
+        <div className="topbar-actions">
+          <p>Academic Decision-Support System</p>
+          <div className="header-account">
+            <span>{authUser.name || authUser.email}</span>
+            <button type="button" onClick={handleLogout}>
+              Logout
+            </button>
+          </div>
+        </div>
       </header>
 
       <nav className="step-nav" aria-label="Search progress">
