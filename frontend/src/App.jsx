@@ -3,7 +3,6 @@ import "./App.css";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5001";
-const SESSION_KEY = "tshm_session_id";
 const AUTH_TOKEN_KEY = "tshm_auth_token";
 const AUTH_USER_KEY = "tshm_auth_user";
 
@@ -26,6 +25,17 @@ const housingTypes = [
 ];
 
 const safetyLevels = ["Any", "Medium+", "High Only"];
+
+const defaultFormData = {
+  campus: "",
+  housingType: "All types",
+  minRent: 500,
+  maxRent: 2000,
+  maxCommute: 30,
+  safetyLevel: "Any",
+  amenities: [],
+  notes: "",
+};
 
 const helpCards = [
   {
@@ -53,20 +63,6 @@ const helpCards = [
     tone: "orange",
   },
 ];
-
-const createLocalSessionId = () =>
-  `anon_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
-
-const getStoredSessionId = () => {
-  const existingSessionId = localStorage.getItem(SESSION_KEY);
-  if (existingSessionId) {
-    return existingSessionId;
-  }
-
-  const newSessionId = createLocalSessionId();
-  localStorage.setItem(SESSION_KEY, newSessionId);
-  return newSessionId;
-};
 
 const getStoredAuthUser = () => {
   const storedUser = localStorage.getItem(AUTH_USER_KEY);
@@ -120,6 +116,8 @@ const getBackendMessage = (data) => {
 
 const isValidEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 
+const isUnauthorizedError = (error) => error.message.includes("HTTP 401");
+
 const apiRequest = async (path, options = {}, params = {}) => {
   const url = buildApiUrl(path, params);
 
@@ -159,7 +157,6 @@ const apiRequest = async (path, options = {}, params = {}) => {
 };
 
 function App() {
-  const [sessionId, setSessionId] = useState(() => getStoredSessionId());
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -174,23 +171,26 @@ function App() {
   const [isAuthChecking, setIsAuthChecking] = useState(() =>
     Boolean(localStorage.getItem(AUTH_TOKEN_KEY)),
   );
-  const [formData, setFormData] = useState({
-    campus: "",
-    housingType: "All types",
-    minRent: 500,
-    maxRent: 2000,
-    maxCommute: 30,
-    safetyLevel: "Any",
-    amenities: [],
-    notes: "",
-  });
+  const [formData, setFormData] = useState(defaultFormData);
   const [status, setStatus] = useState({ type: "", message: "" });
   const [savedPreference, setSavedPreference] = useState(null);
   const [savedPreferences, setSavedPreferences] = useState([]);
+  const [hasLoadedPreferenceIntoForm, setHasLoadedPreferenceIntoForm] =
+    useState(false);
   const [listings, setListings] = useState([]);
   const [hasSearched, setHasSearched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
+
+  const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
+    setSavedPreference(null);
+    setSavedPreferences([]);
+    setStatus({ type: "", message: "" });
+    if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
+      setFormData(defaultFormData);
+    }
+    setHasLoadedPreferenceIntoForm(false);
+  };
 
   useEffect(() => {
     const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -226,6 +226,11 @@ function App() {
 
         clearAuthStorage();
         setAuthUser(null);
+        setSavedPreference(null);
+        setSavedPreferences([]);
+        setStatus({ type: "", message: "" });
+        setFormData(defaultFormData);
+        setHasLoadedPreferenceIntoForm(false);
         setAuthStatus({
           type: "error",
           message: "Your saved login expired. Please log in again.",
@@ -311,6 +316,7 @@ function App() {
 
       localStorage.setItem(AUTH_TOKEN_KEY, data.token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+      clearDisplayedPreferences({ resetLoadedForm: true });
       setAuthUser(data.user);
       setAuthForm({ name: "", email: "", password: "" });
       setAuthStatus({
@@ -334,11 +340,13 @@ function App() {
     clearAuthStorage();
     setAuthUser(null);
     setAuthForm({ name: "", email: "", password: "" });
+    clearDisplayedPreferences({ resetLoadedForm: true });
     setAuthStatus({ type: "success", message: "You have logged out." });
   };
 
   const updateField = (field, value) => {
     setStatus({ type: "", message: "" });
+    setHasLoadedPreferenceIntoForm(false);
     setFormData((currentData) => ({
       ...currentData,
       [field]: value,
@@ -349,6 +357,7 @@ function App() {
     const numberValue = Number(value);
 
     setStatus({ type: "", message: "" });
+    setHasLoadedPreferenceIntoForm(false);
     setFormData((currentData) => {
       const nextData = {
         ...currentData,
@@ -370,6 +379,15 @@ function App() {
   const handleSubmit = async (event) => {
     event.preventDefault();
 
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      setStatus({
+        type: "error",
+        message: "Please log in to save your preferences.",
+      });
+      return;
+    }
+
     if (!formData.campus) {
       setStatus({
         type: "error",
@@ -385,12 +403,10 @@ function App() {
       const preferenceData = await apiRequest("/api/preferences", {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${authToken}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          ...formData,
-          sessionId,
-        }),
+        body: JSON.stringify(formData),
       });
 
       const listingData = await apiRequest("/api/listings", {}, {
@@ -401,13 +417,12 @@ function App() {
         safetyLevel: formData.safetyLevel === "Any" ? "" : formData.safetyLevel,
       });
 
-      localStorage.setItem(SESSION_KEY, preferenceData.sessionId);
-      setSessionId(preferenceData.sessionId);
       setSavedPreference(preferenceData.preference);
       setSavedPreferences((currentPreferences) => [
         preferenceData.preference,
         ...currentPreferences,
       ]);
+      setHasLoadedPreferenceIntoForm(false);
       setListings(listingData.listings || []);
       setHasSearched(true);
       setStatus({
@@ -420,6 +435,17 @@ function App() {
             : "No matching listings found. Your search preferences were saved.",
       });
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        clearDisplayedPreferences({ resetLoadedForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+
       setStatus({
         type: "error",
         message: error.message,
@@ -430,7 +456,12 @@ function App() {
   };
 
   const loadSavedPreferences = async () => {
-    if (!sessionId) {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      setStatus({
+        type: "error",
+        message: "Please log in to load your saved preferences.",
+      });
       return;
     }
 
@@ -438,7 +469,11 @@ function App() {
     setStatus({ type: "", message: "" });
 
     try {
-      const data = await apiRequest(`/api/preferences/${sessionId}`);
+      const data = await apiRequest("/api/preferences", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
       const preferences = data.preferences || [];
       const latestPreference = preferences[0];
 
@@ -457,16 +492,30 @@ function App() {
           amenities: latestPreference.amenities || currentData.amenities,
           notes: latestPreference.notes || currentData.notes,
         }));
+        setHasLoadedPreferenceIntoForm(true);
+      } else {
+        setHasLoadedPreferenceIntoForm(false);
       }
 
       setStatus({
         type: preferences.length > 0 ? "success" : "error",
         message:
           preferences.length > 0
-            ? "Loaded saved preferences for this session."
-            : "No saved preferences found for this session.",
+            ? "Loaded your saved preferences."
+            : "No saved preferences found for your account.",
       });
     } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        clearDisplayedPreferences({ resetLoadedForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+
       setStatus({
         type: "error",
         message: error.message,
@@ -781,13 +830,13 @@ function App() {
         </form>
 
         <div className="session-panel">
-          <span>Anonymous session</span>
-          <code>{sessionId || "Starting session..."}</code>
+          <span>Saved to account</span>
+          <code>{authUser.name || authUser.email}</code>
           <button
             type="button"
             className="link-button"
             onClick={loadSavedPreferences}
-            disabled={isLoadingSaved || !sessionId}
+            disabled={isLoadingSaved}
           >
             {isLoadingSaved ? "Loading..." : "Load Saved Preferences"}
           </button>

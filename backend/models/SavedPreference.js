@@ -4,8 +4,11 @@ const savedPreferenceSchema = new mongoose.Schema(
   {
     sessionId: {
       type: String,
-      required: true,
       trim: true,
+    },
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
     },
     selectedCampusId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -81,5 +84,6 @@ const savedPreferenceSchema = new mongoose.Schema(
 );
 
 savedPreferenceSchema.index({ sessionId: 1 });
+savedPreferenceSchema.index({ userId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("SavedPreference", savedPreferenceSchema);
