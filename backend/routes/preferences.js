@@ -1,12 +1,23 @@
 const express = require("express");
-const crypto = require("crypto");
 
+const authenticateUser = require("../middleware/auth");
 const SavedPreference = require("../models/SavedPreference");
 
 const router = express.Router();
 const SAFETY_LEVELS = ["Any", "Medium+", "High Only"];
 
-const createSessionId = () => `anon_${crypto.randomUUID()}`;
+const getAuthenticatedUserId = (req, res) => {
+  const userId = req.user?._id;
+
+  if (!userId) {
+    res.status(401).json({
+      message: "Authentication required.",
+    });
+    return null;
+  }
+
+  return userId;
+};
 
 const toOptionalNumber = (value, fieldName, errors) => {
   if (value === undefined || value === null || value === "") {
@@ -33,29 +44,48 @@ const normalizeAmenities = (amenities) => {
     .filter(Boolean);
 };
 
+const buildPreferencePayload = (req, errors, userId) => {
+  const minRent = toOptionalNumber(req.body.minRent, "minRent", errors);
+  const maxRent = toOptionalNumber(req.body.maxRent, "maxRent", errors);
+  const maxCommute = toOptionalNumber(
+    req.body.maxCommute,
+    "maxCommute",
+    errors,
+  );
+  const safetyLevel = req.body.safetyLevel || "Any";
+
+  if (minRent !== undefined && maxRent !== undefined && maxRent < minRent) {
+    errors.push("maxRent should not be below minRent");
+  }
+
+  if (!SAFETY_LEVELS.includes(safetyLevel)) {
+    errors.push("safetyLevel should be one of: Any, Medium+, High Only");
+  }
+
+  return {
+    userId,
+    campus: req.body.campus,
+    housingType: req.body.housingType,
+    minRent,
+    maxRent,
+    maxCommute,
+    safetyLevel,
+    amenities: normalizeAmenities(req.body.amenities),
+    notes: req.body.notes,
+  };
+};
+
+router.use(authenticateUser);
+
 router.post("/", async (req, res) => {
   try {
     const errors = [];
-    const minRent = toOptionalNumber(req.body.minRent, "minRent", errors);
-    const maxRent = toOptionalNumber(req.body.maxRent, "maxRent", errors);
-    const maxCommute = toOptionalNumber(
-      req.body.maxCommute,
-      "maxCommute",
-      errors,
-    );
-    const safetyLevel = req.body.safetyLevel || "Any";
-
-    if (
-      minRent !== undefined &&
-      maxRent !== undefined &&
-      maxRent < minRent
-    ) {
-      errors.push("maxRent should not be below minRent");
+    const userId = getAuthenticatedUserId(req, res);
+    if (!userId) {
+      return;
     }
 
-    if (!SAFETY_LEVELS.includes(safetyLevel)) {
-      errors.push("safetyLevel should be one of: Any, Medium+, High Only");
-    }
+    const preferencePayload = buildPreferencePayload(req, errors, userId);
 
     if (errors.length > 0) {
       return res.status(400).json({
@@ -64,26 +94,10 @@ router.post("/", async (req, res) => {
       });
     }
 
-    const sessionId =
-      typeof req.body.sessionId === "string" && req.body.sessionId.trim()
-        ? req.body.sessionId.trim()
-        : createSessionId();
-
-    const preference = await SavedPreference.create({
-      sessionId,
-      campus: req.body.campus,
-      housingType: req.body.housingType,
-      minRent,
-      maxRent,
-      maxCommute,
-      safetyLevel,
-      amenities: normalizeAmenities(req.body.amenities),
-      notes: req.body.notes,
-    });
+    const preference = await SavedPreference.create(preferencePayload);
 
     return res.status(201).json({
       success: true,
-      sessionId,
       preference,
     });
   } catch (error) {
@@ -95,29 +109,15 @@ router.post("/", async (req, res) => {
   }
 });
 
-router.put("/:sessionId", async (req, res) => {
+router.put("/:preferenceId", async (req, res) => {
   try {
     const errors = [];
-    const minRent = toOptionalNumber(req.body.minRent, "minRent", errors);
-    const maxRent = toOptionalNumber(req.body.maxRent, "maxRent", errors);
-    const maxCommute = toOptionalNumber(
-      req.body.maxCommute,
-      "maxCommute",
-      errors,
-    );
-    const safetyLevel = req.body.safetyLevel || "Any";
-
-    if (
-      minRent !== undefined &&
-      maxRent !== undefined &&
-      maxRent < minRent
-    ) {
-      errors.push("maxRent should not be below minRent");
+    const userId = getAuthenticatedUserId(req, res);
+    if (!userId) {
+      return;
     }
 
-    if (!SAFETY_LEVELS.includes(safetyLevel)) {
-      errors.push("safetyLevel should be one of: Any, Medium+, High Only");
-    }
+    const preferencePayload = buildPreferencePayload(req, errors, userId);
 
     if (errors.length > 0) {
       return res.status(400).json({
@@ -127,29 +127,23 @@ router.put("/:sessionId", async (req, res) => {
     }
 
     const preference = await SavedPreference.findOneAndUpdate(
-      { sessionId: req.params.sessionId },
-      {
-        sessionId: req.params.sessionId,
-        campus: req.body.campus,
-        housingType: req.body.housingType,
-        minRent,
-        maxRent,
-        maxCommute,
-        safetyLevel,
-        amenities: normalizeAmenities(req.body.amenities),
-        notes: req.body.notes,
-      },
+      { _id: req.params.preferenceId, userId },
+      preferencePayload,
       {
         returnDocument: "after",
         runValidators: true,
-        sort: { createdAt: -1 },
-        upsert: true,
       },
     );
 
+    if (!preference) {
+      return res.status(404).json({
+        success: false,
+        message: "Saved preference not found",
+      });
+    }
+
     return res.json({
       success: true,
-      sessionId: req.params.sessionId,
       preference,
     });
   } catch (error) {
@@ -161,15 +155,19 @@ router.put("/:sessionId", async (req, res) => {
   }
 });
 
-router.get("/:sessionId", async (req, res) => {
+router.get("/", async (req, res) => {
   try {
+    const userId = getAuthenticatedUserId(req, res);
+    if (!userId) {
+      return;
+    }
+
     const preferences = await SavedPreference.find({
-      sessionId: req.params.sessionId,
+      userId,
     }).sort({ createdAt: -1 });
 
     return res.json({
       success: true,
-      sessionId: req.params.sessionId,
       preferences,
     });
   } catch (error) {
@@ -177,25 +175,6 @@ router.get("/:sessionId", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while loading preferences",
-    });
-  }
-});
-
-router.get("/", async (req, res) => {
-  try {
-    const preferences = await SavedPreference.find()
-      .sort({ createdAt: -1 })
-      .limit(20);
-
-    return res.json({
-      success: true,
-      preferences,
-    });
-  } catch (error) {
-    console.error("Failed to list preferences:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error while listing preferences",
     });
   }
 });
