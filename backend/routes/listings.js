@@ -2,12 +2,13 @@ const express = require("express");
 const router = express.Router();
 const HousingListing = require("../models/HousingListing");
 
-const propertyTypeMap = {
-  "All types": null,
-  "Shared House": "Room",
-  "Room Rental": "Room",
-  Basement: "House",
-};
+const propertyTypes = [
+  "Apartment",
+  "Shared House",
+  "Studio",
+  "Basement",
+  "Room Rental",
+];
 
 const safetyLevelMap = {
   "Medium+": ["Low", "Medium"],
@@ -26,17 +27,19 @@ router.get("/", async (req, res) => {
       if (req.query.maxRent) filter.monthlyRent.$lte = Number(req.query.maxRent);
     }
 
-    if (req.query.propertyType) {
-      const propertyType =
-        propertyTypeMap[req.query.propertyType] ?? req.query.propertyType;
-
-      if (propertyType) {
-        filter.propertyType = propertyType;
-      }
+    if (
+      req.query.propertyType &&
+      propertyTypes.includes(req.query.propertyType)
+    ) {
+      filter.propertyType = req.query.propertyType;
     }
 
     if (req.query.safetyLevel) {
-      const crimeRateLevels = safetyLevelMap[req.query.safetyLevel];
+      const crimeRateLevels =
+        safetyLevelMap[req.query.safetyLevel] ??
+        (["Low", "Medium", "High"].includes(req.query.safetyLevel)
+          ? [req.query.safetyLevel]
+          : null);
 
       if (crimeRateLevels) {
         filter["safety.crimeRateLevel"] = { $in: crimeRateLevels };
@@ -45,9 +48,9 @@ router.get("/", async (req, res) => {
 
     const listings = await HousingListing.find(filter)
       .select(
-        "_id title address monthlyRent propertyType bedrooms bathrooms furnished location safety.crimeRateLevel transitStops valueScore neighborhood"
+        "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities source isActive",
       )
-      .sort({ valueScore: -1 });
+      .sort({ monthlyRent: 1 });
 
     res.json({ count: listings.length, listings });
   } catch (err) {
