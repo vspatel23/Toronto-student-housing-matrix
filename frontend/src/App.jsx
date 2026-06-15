@@ -33,6 +33,9 @@ function App() {
   );
   const [formData, setFormData] = useState(defaultFormData);
   const [status, setStatus] = useState({ type: "", message: "" });
+  const [campuses, setCampuses] = useState([]);
+  const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
+  const [campusError, setCampusError] = useState("");
   const [savedPreference, setSavedPreference] = useState(null);
   const [savedPreferences, setSavedPreferences] = useState([]);
   const [hasLoadedPreferenceIntoForm, setHasLoadedPreferenceIntoForm] =
@@ -64,6 +67,9 @@ function App() {
     setActiveSearch(null);
     setCurrentView("search");
     setResultsError("");
+    setCampuses([]);
+    setCampusError("");
+    setIsLoadingCampuses(false);
     setSelectedListing(null);
     setSelectedListingId("");
     setListingError("");
@@ -129,6 +135,41 @@ function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadCampuses = async () => {
+      setIsLoadingCampuses(true);
+      setCampusError("");
+
+      try {
+        const data = await apiRequest("/api/campuses");
+        if (isMounted) {
+          setCampuses(Array.isArray(data.campuses) ? data.campuses : []);
+        }
+      } catch {
+        if (isMounted) {
+          setCampuses([]);
+          setCampusError("Campus options could not be loaded.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingCampuses(false);
+        }
+      }
+    };
+
+    loadCampuses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authUser]);
 
   const updateAuthField = (field, value) => {
     setAuthStatus({ type: "", message: "" });
@@ -552,10 +593,13 @@ function App() {
           </section>
 
           <SearchForm
+            campuses={campuses}
             formData={formData}
             status={status}
             isSaving={isSaving}
+            isLoadingCampuses={isLoadingCampuses}
             isLoadingSaved={isLoadingSaved}
+            campusError={campusError}
             savedPreference={savedPreference}
             savedPreferences={savedPreferences}
             userName={displayName}
