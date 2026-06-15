@@ -1,11 +1,25 @@
-import { campuses, housingTypes, safetyLevels } from "../utils/constants";
+import { housingTypes, safetyLevels } from "../utils/constants";
 import { formatDate } from "../utils/api";
 
+const getCampusLabel = (campus) => {
+  const institution = campus?.institution?.trim();
+  const campusName = campus?.campusName?.trim();
+
+  if (institution && campusName) {
+    return `${institution} -- ${campusName}`;
+  }
+
+  return institution || campusName || "Unnamed campus";
+};
+
 function SearchForm({
+  campuses,
   formData,
   status,
   isSaving,
+  isLoadingCampuses,
   isLoadingSaved,
+  campusError,
   savedPreference,
   savedPreferences,
   userName,
@@ -25,14 +39,22 @@ function SearchForm({
             <select
               value={formData.campus}
               onChange={(event) => onFieldChange("campus", event.target.value)}
+              disabled={isLoadingCampuses || campuses.length === 0}
             >
-              <option value="">Choose a campus...</option>
+              <option value="">
+                {isLoadingCampuses
+                  ? "Loading campuses..."
+                  : campuses.length === 0
+                    ? "No campuses available"
+                    : "Choose a campus..."}
+              </option>
               {campuses.map((campus) => (
-                <option key={campus} value={campus}>
-                  {campus}
+                <option key={campus._id} value={getCampusLabel(campus)}>
+                  {getCampusLabel(campus)}
                 </option>
               ))}
             </select>
+            {campusError && <p className="helper warning">{campusError}</p>}
           </label>
 
           <label>
