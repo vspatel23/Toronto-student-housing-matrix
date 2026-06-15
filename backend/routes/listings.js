@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const router = express.Router();
 const HousingListing = require("../models/HousingListing");
 
@@ -71,13 +72,17 @@ router.get("/", async (req, res) => {
 // GET /api/listings/:id
 router.get("/:id", async (req, res) => {
   try {
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid listing ID" });
+    }
+
     const listing = await HousingListing.findById(req.params.id);
     if (!listing) {
       return res.status(404).json({ message: "Listing not found" });
     }
     res.json(listing);
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Server error" });
   }
 });
 
