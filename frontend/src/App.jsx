@@ -1,160 +1,18 @@
 import { useEffect, useState } from "react";
 import "./App.css";
-
-const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5001";
-const AUTH_TOKEN_KEY = "tshm_auth_token";
-const AUTH_USER_KEY = "tshm_auth_user";
-
-const campuses = [
-  "University of Toronto -- St. George",
-  "University of Toronto -- Scarborough",
-  "University of Toronto -- Mississauga",
-  "Toronto Metropolitan University",
-  "York University",
-  "Seneca Polytechnic",
-];
-
-const housingTypes = [
-  "All types",
-  "Apartment",
-  "Shared House",
-  "Studio",
-  "Basement",
-  "Room Rental",
-];
-
-const safetyLevels = ["Any", "Medium+", "High Only"];
-
-const defaultFormData = {
-  campus: "",
-  housingType: "All types",
-  minRent: 500,
-  maxRent: 2000,
-  maxCommute: 30,
-  safetyLevel: "Any",
-  amenities: [],
-  notes: "",
-};
-
-const helpCards = [
-  {
-    icon: "◷",
-    title: "TTC Commute Times",
-    text: "Estimated transit commute to your selected campus",
-    tone: "blue",
-  },
-  {
-    icon: "⌂",
-    title: "Safety Data",
-    text: "Neighbourhood crime statistics as relative safety indicators",
-    tone: "green",
-  },
-  {
-    icon: "☷",
-    title: "Value Score",
-    text: "Weighted composite score for objective housing comparison",
-    tone: "purple",
-  },
-  {
-    icon: "⌖",
-    title: "Map Visualization",
-    text: "Interactive map showing housing locations across Toronto",
-    tone: "orange",
-  },
-];
-
-const getStoredAuthUser = () => {
-  const storedUser = localStorage.getItem(AUTH_USER_KEY);
-
-  if (!storedUser) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(storedUser);
-  } catch {
-    localStorage.removeItem(AUTH_USER_KEY);
-    return null;
-  }
-};
-
-const clearAuthStorage = () => {
-  localStorage.removeItem(AUTH_TOKEN_KEY);
-  localStorage.removeItem(AUTH_USER_KEY);
-};
-
-const formatDate = (dateValue) =>
-  new Intl.DateTimeFormat("en-CA", {
-    dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(dateValue));
-
-const buildApiUrl = (path, params = {}) => {
-  const url = new URL(path, API_BASE_URL);
-
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && value !== "") {
-      url.searchParams.set(key, value);
-    }
-  });
-
-  return url.toString();
-};
-
-const getBackendMessage = (data) => {
-  if (!data) {
-    return "";
-  }
-
-  if (Array.isArray(data.errors) && data.errors.length > 0) {
-    return data.errors.join(", ");
-  }
-
-  return data.message || data.error || "";
-};
-
-const isValidEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
-
-const isUnauthorizedError = (error) => error.message.includes("HTTP 401");
-
-const apiRequest = async (path, options = {}, params = {}) => {
-  const url = buildApiUrl(path, params);
-
-  let response;
-  try {
-    response = await fetch(url, options);
-  } catch (error) {
-    throw new Error(`API request failed: ${url}. ${error.message}`, {
-      cause: error,
-    });
-  }
-
-  const text = await response.text();
-  let data = null;
-
-  if (text) {
-    try {
-      data = JSON.parse(text);
-    } catch (error) {
-      throw new Error(
-        `API request failed: ${url}. HTTP ${response.status} - backend returned a non-JSON response.`,
-        { cause: error },
-      );
-    }
-  }
-
-  if (!response.ok) {
-    const backendMessage = getBackendMessage(data);
-    throw new Error(
-      `API request failed: ${url}. HTTP ${response.status}${
-        backendMessage ? ` - ${backendMessage}` : ""
-      }`,
-    );
-  }
-
-  return data;
-};
+import { AUTH_TOKEN_KEY, AUTH_USER_KEY, defaultFormData } from "./utils/constants";
+import {
+  getStoredAuthUser,
+  clearAuthStorage,
+  isValidEmail,
+  isUnauthorizedError,
+  apiRequest,
+} from "./utils/api";
+import AuthForm from "./components/AuthForm";
+import Header from "./components/Header";
+import StepProgress from "./components/StepProgress";
+import SearchForm from "./components/SearchForm";
+import HelpCards from "./components/HelpCards";
 
 function App() {
   const [authMode, setAuthMode] = useState("login");
@@ -535,147 +393,24 @@ function App() {
 
   if (!authUser) {
     return (
-      <main className="auth-page">
-        <section className="auth-card" aria-labelledby="auth-title">
-          <div className="auth-brand">
-            <div className="home-mark" aria-hidden="true">
-              ⌂
-            </div>
-            <span>Toronto Student Housing Matrix</span>
-          </div>
-
-          <div className="auth-heading">
-            <h1 id="auth-title">
-              {authMode === "register" ? "Create Account" : "Log In"}
-            </h1>
-            <p>
-              {authMode === "register"
-                ? "Create an account to continue to the housing dashboard."
-                : "Log in to continue to the housing dashboard."}
-            </p>
-          </div>
-
-          <form className="auth-form" onSubmit={handleAuthSubmit}>
-            {authMode === "register" && (
-              <label>
-                <span>Name</span>
-                <input
-                  type="text"
-                  autoComplete="name"
-                  value={authForm.name}
-                  onChange={(event) =>
-                    updateAuthField("name", event.target.value)
-                  }
-                />
-              </label>
-            )}
-
-            <label>
-              <span>Email</span>
-              <input
-                type="email"
-                autoComplete="email"
-                value={authForm.email}
-                onChange={(event) =>
-                  updateAuthField("email", event.target.value)
-                }
-              />
-            </label>
-
-            <label>
-              <span>Password</span>
-              <input
-                type="password"
-                autoComplete={
-                  authMode === "register" ? "new-password" : "current-password"
-                }
-                value={authForm.password}
-                onChange={(event) =>
-                  updateAuthField("password", event.target.value)
-                }
-              />
-            </label>
-
-            {authStatus.message && (
-              <div className={`status-message ${authStatus.type}`} role="status">
-                {authStatus.message}
-              </div>
-            )}
-
-            <button
-              className="auth-submit-button"
-              type="submit"
-              disabled={isAuthSubmitting}
-            >
-              {isAuthSubmitting
-                ? "Submitting..."
-                : authMode === "register"
-                  ? "Create Account"
-                  : "Log In"}
-            </button>
-          </form>
-
-          <p className="auth-switch">
-            {authMode === "register"
-              ? "Already have an account?"
-              : "Need an account?"}
-            <button
-              type="button"
-              onClick={() =>
-                handleAuthModeChange(
-                  authMode === "register" ? "login" : "register",
-                )
-              }
-            >
-              {authMode === "register" ? "Log In" : "Register"}
-            </button>
-          </p>
-        </section>
-      </main>
+      <AuthForm
+        authMode={authMode}
+        authForm={authForm}
+        authStatus={authStatus}
+        isSubmitting={isAuthSubmitting}
+        onFieldChange={updateAuthField}
+        onModeChange={handleAuthModeChange}
+        onSubmit={handleAuthSubmit}
+      />
     );
   }
 
+  const displayName = authUser.name || authUser.email;
+
   return (
     <main className="app-shell">
-      <header className="topbar">
-        <div className="brand">
-          <div className="home-mark" aria-hidden="true">
-            ⌂
-          </div>
-          <span>Toronto Student Housing Matrix</span>
-        </div>
-        <div className="topbar-actions">
-          <p>Academic Decision-Support System</p>
-          <div className="header-account">
-            <span>{authUser.name || authUser.email}</span>
-            <button type="button" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
-        </div>
-      </header>
-
-      <nav className="step-nav" aria-label="Search progress">
-        <div className="step active">
-          <span className="step-number">1</span>
-          <span className="step-label">⌕ Search</span>
-        </div>
-        <span className="step-line"></span>
-        <div className="step">
-          <span className="step-number">2</span>
-          <span className="step-label">☷ Browse Results</span>
-        </div>
-        <span className="step-line"></span>
-        <div className="step">
-          <span className="step-number">3</span>
-          <span className="step-label">▤ View Details</span>
-        </div>
-        <span className="step-line"></span>
-        <div className="step">
-          <span className="step-number">4</span>
-          <span className="step-label">⌘ Compare</span>
-        </div>
-      </nav>
+      <Header userName={displayName} onLogout={handleLogout} />
+      <StepProgress />
 
       <section className="hero-section">
         <div className="hero-copy">
@@ -687,238 +422,23 @@ function App() {
         </div>
       </section>
 
-      <section className="search-card" aria-labelledby="criteria-title">
-        <h2 id="criteria-title">⌕ Set Your Search Criteria</h2>
+      <SearchForm
+        formData={formData}
+        status={status}
+        isSaving={isSaving}
+        isLoadingSaved={isLoadingSaved}
+        savedPreference={savedPreference}
+        savedPreferences={savedPreferences}
+        hasSearched={hasSearched}
+        listings={listings}
+        userName={displayName}
+        onFieldChange={updateField}
+        onRentChange={handleRentChange}
+        onSubmit={handleSubmit}
+        onLoadSaved={loadSavedPreferences}
+      />
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-grid">
-            <label>
-              <span>♙ Select Campus</span>
-              <select
-                value={formData.campus}
-                onChange={(event) => updateField("campus", event.target.value)}
-              >
-                <option value="">Choose a campus...</option>
-                {campuses.map((campus) => (
-                  <option key={campus} value={campus}>
-                    {campus}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label>
-              <span>⌂ Housing Type</span>
-              <select
-                value={formData.housingType}
-                onChange={(event) =>
-                  updateField("housingType", event.target.value)
-                }
-              >
-                {housingTypes.map((housingType) => (
-                  <option key={housingType} value={housingType}>
-                    {housingType}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
-
-          <div className="range-section">
-            <div className="range-heading">
-              <span>$ Monthly Price Range</span>
-              <strong>
-                ${formData.minRent} - ${formData.maxRent}
-              </strong>
-            </div>
-            <label className="range-row">
-              <span>Min</span>
-              <input
-                type="range"
-                min="500"
-                max="3000"
-                step="50"
-                value={formData.minRent}
-                onChange={(event) =>
-                  handleRentChange("minRent", event.target.value)
-                }
-              />
-              <output>${formData.minRent}</output>
-            </label>
-            <label className="range-row">
-              <span>Max</span>
-              <input
-                type="range"
-                min="500"
-                max="3000"
-                step="50"
-                value={formData.maxRent}
-                onChange={(event) =>
-                  handleRentChange("maxRent", event.target.value)
-                }
-              />
-              <output>${formData.maxRent}</output>
-            </label>
-          </div>
-
-          <div className="form-grid">
-            <div className="range-section compact">
-              <div className="range-heading">
-                <span>◷ Max TTC Commute</span>
-                <strong>{formData.maxCommute} min</strong>
-              </div>
-              <p className={formData.campus ? "helper good" : "helper warning"}>
-                {formData.campus
-                  ? `Commute to: ${formData.campus}`
-                  : "Select a campus first"}
-              </p>
-              <input
-                type="range"
-                min="10"
-                max="60"
-                step="5"
-                value={formData.maxCommute}
-                onChange={(event) =>
-                  updateField("maxCommute", Number(event.target.value))
-                }
-              />
-              <div className="range-scale">
-                <span>10 min</span>
-                <span>60 min</span>
-              </div>
-            </div>
-
-            <fieldset className="safety-fieldset">
-              <legend>♢ Minimum Safety Level</legend>
-              <p>Based on historical crime data</p>
-              <div className="segmented-control">
-                {safetyLevels.map((level) => (
-                  <button
-                    key={level}
-                    type="button"
-                    className={
-                      formData.safetyLevel === level ? "selected" : ""
-                    }
-                    onClick={() => updateField("safetyLevel", level)}
-                  >
-                    {level}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-          </div>
-
-          <label className="notes-field">
-            <span>Optional notes</span>
-            <textarea
-              rows="3"
-              value={formData.notes}
-              placeholder="Example: prefers furnished rooms or quiet neighbourhoods"
-              onChange={(event) => updateField("notes", event.target.value)}
-            />
-          </label>
-
-          {status.message && (
-            <div className={`status-message ${status.type}`} role="status">
-              {status.message}
-            </div>
-          )}
-
-          <button className="submit-button" type="submit" disabled={isSaving}>
-            ⌕ {isSaving ? "Saving..." : "Find Housing"}
-          </button>
-        </form>
-
-        <div className="session-panel">
-          <span>Saved to account</span>
-          <code>{authUser.name || authUser.email}</code>
-          <button
-            type="button"
-            className="link-button"
-            onClick={loadSavedPreferences}
-            disabled={isLoadingSaved}
-          >
-            {isLoadingSaved ? "Loading..." : "Load Saved Preferences"}
-          </button>
-        </div>
-
-        {savedPreference && (
-          <section className="summary-panel" aria-label="Saved preference">
-            <h3>Current Saved Search</h3>
-            <p>
-              {savedPreference.campus} · {savedPreference.housingType} · $
-              {savedPreference.minRent}-${savedPreference.maxRent} · Up to{" "}
-              {savedPreference.maxCommute} min · {savedPreference.safetyLevel}
-            </p>
-          </section>
-        )}
-
-        {hasSearched && (
-          <section className="results-panel" aria-label="Housing results">
-            <h3>Housing Results</h3>
-            {listings.length > 0 ? (
-              <div className="results-grid">
-                {listings.map((listing) => (
-                  <article key={listing._id} className="result-item">
-                    <div>
-                      <strong>{listing.title || "Untitled listing"}</strong>
-                      <span>
-                        {listing.neighborhood || listing.address || "Toronto"}
-                      </span>
-                    </div>
-                    <p>
-                      ${listing.monthlyRent || "N/A"} ·{" "}
-                      {listing.propertyType || "Housing"} ·{" "}
-                      {listing.furnished ? "Furnished" : "Unfurnished"}
-                    </p>
-                    <small>
-                      Safety: {listing.safety?.crimeRateLevel || "Unknown"} ·
-                      Value score: {listing.valueScore || "N/A"}
-                    </small>
-                  </article>
-                ))}
-              </div>
-            ) : (
-              <p className="empty-results">
-                No listings match these filters yet.
-              </p>
-            )}
-          </section>
-        )}
-
-        {savedPreferences.length > 0 && (
-          <section className="saved-list" aria-label="Previous preferences">
-            <h3>Saved Preferences</h3>
-            <div className="saved-grid">
-              {savedPreferences.map((preference) => (
-                <article key={preference._id} className="saved-item">
-                  <strong>{preference.campus || "No campus selected"}</strong>
-                  <span>{formatDate(preference.createdAt)}</span>
-                  <p>
-                    {preference.housingType} · ${preference.minRent}-$
-                    {preference.maxRent} · {preference.maxCommute} min ·{" "}
-                    {preference.safetyLevel}
-                  </p>
-                  {preference.notes && <small>{preference.notes}</small>}
-                </article>
-              ))}
-            </div>
-          </section>
-        )}
-      </section>
-
-      <section className="help-section" aria-labelledby="help-title">
-        <h2 id="help-title">How We Help You Decide</h2>
-        <div className="help-grid">
-          {helpCards.map((card) => (
-            <article className="help-card" key={card.title}>
-              <div className={`help-icon ${card.tone}`}>{card.icon}</div>
-              <h3>{card.title}</h3>
-              <p>{card.text}</p>
-            </article>
-          ))}
-        </div>
-      </section>
+      <HelpCards />
     </main>
   );
 }
