@@ -1,5 +1,6 @@
 import { housingTypes, safetyLevels } from "../utils/constants";
 import { formatDate } from "../utils/api";
+import StatusMessage from "./StatusMessage";
 
 const getCampusLabel = (campus) => {
   const institution = campus?.institution?.trim();
@@ -20,10 +21,12 @@ function SearchForm({
   campuses,
   formData,
   status,
-  isSaving,
+  isSavingPreference,
+  isSearchingListings,
   isLoadingCampuses,
   isLoadingSaved,
   campusError,
+  validationErrors,
   savedPreference,
   savedPreferences,
   userName,
@@ -31,7 +34,10 @@ function SearchForm({
   onRentChange,
   onSubmit,
   onLoadSaved,
+  onRetryCampuses,
 }) {
+  const isSubmittingSearch = isSavingPreference || isSearchingListings;
+
   return (
     <section className="search-card" aria-labelledby="criteria-title">
       <h2 id="criteria-title">⌕ Set Your Search Criteria</h2>
@@ -41,13 +47,18 @@ function SearchForm({
           <label>
             <span>♙ Select Campus</span>
             <select
+              id="campus"
               value={formData.campus}
               onChange={(event) => onFieldChange("campus", event.target.value)}
               disabled={isLoadingCampuses || campuses.length === 0}
+              aria-invalid={validationErrors.campus ? "true" : "false"}
+              aria-describedby={
+                validationErrors.campus || campusError ? "campus-message" : undefined
+              }
             >
               <option value="">
                 {isLoadingCampuses
-                  ? "Loading campuses..."
+                  ? "Loading campuses…"
                   : campuses.length === 0
                     ? "No campuses available"
                     : "Choose a campus..."}
@@ -58,7 +69,24 @@ function SearchForm({
                 </option>
               ))}
             </select>
-            {campusError && <p className="helper warning">{campusError}</p>}
+            {validationErrors.campus && (
+              <p className="validation-message" id="campus-message">
+                {validationErrors.campus}
+              </p>
+            )}
+            {!validationErrors.campus && isLoadingCampuses && (
+              <p className="helper info" id="campus-message" role="status">
+                Loading campuses…
+              </p>
+            )}
+            {!validationErrors.campus && campusError && (
+              <div className="field-status-row" id="campus-message">
+                <p className="helper warning">{campusError}</p>
+                <button type="button" className="inline-retry-button" onClick={onRetryCampuses}>
+                  Retry
+                </button>
+              </div>
+            )}
           </label>
 
           <label>
@@ -88,6 +116,7 @@ function SearchForm({
           <label className="range-row">
             <span>Min</span>
             <input
+              id="minRent"
               type="range"
               min="500"
               max="3000"
@@ -102,6 +131,7 @@ function SearchForm({
           <label className="range-row">
             <span>Max</span>
             <input
+              id="maxRent"
               type="range"
               min="500"
               max="3000"
@@ -110,9 +140,18 @@ function SearchForm({
               onChange={(event) =>
                 onRentChange("maxRent", event.target.value)
               }
+              aria-invalid={validationErrors.maxRent ? "true" : "false"}
+              aria-describedby={
+                validationErrors.maxRent ? "max-rent-message" : undefined
+              }
             />
             <output>${formData.maxRent}</output>
           </label>
+          {validationErrors.maxRent && (
+            <p className="validation-message" id="max-rent-message">
+              {validationErrors.maxRent}
+            </p>
+          )}
         </div>
 
         <div className="form-grid">
@@ -127,6 +166,7 @@ function SearchForm({
                 : "Select a campus first"}
             </p>
             <input
+              id="maxCommute"
               type="range"
               min="10"
               max="60"
@@ -173,13 +213,24 @@ function SearchForm({
         </label>
 
         {status.message && (
-          <div className={`status-message ${status.type}`} role="status">
+          <StatusMessage type={status.type || "info"}>
             {status.message}
-          </div>
+          </StatusMessage>
         )}
 
-        <button className="submit-button" type="submit" disabled={isSaving}>
-          ⌕ {isSaving ? "Saving..." : "Find Housing"}
+        {isSearchingListings && (
+          <StatusMessage type="loading">
+            Searching for matching listings...
+          </StatusMessage>
+        )}
+
+        <button className="submit-button" type="submit" disabled={isSubmittingSearch}>
+          ⌕{" "}
+          {isSearchingListings
+            ? "Searching..."
+            : isSavingPreference
+              ? "Saving..."
+              : "Find Housing"}
         </button>
       </form>
 

@@ -67,10 +67,11 @@ export const getCommuteMinutes = (listing, campus) => {
   }
 
   const normalizedCampus = normalizeCampusName(campus);
-  const commute =
-    listing.commuteEstimates.find(
-      (estimate) => normalizeCampusName(estimate?.campus) === normalizedCampus,
-    ) || listing.commuteEstimates[0];
+  const commute = normalizedCampus
+    ? listing.commuteEstimates.find(
+        (estimate) => normalizeCampusName(estimate?.campus) === normalizedCampus,
+      )
+    : listing.commuteEstimates[0];
 
   const minutes = Number(commute?.minutes);
   return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
@@ -79,6 +80,11 @@ export const getCommuteMinutes = (listing, campus) => {
 export const formatCommute = (listing, campus) => {
   const minutes = getCommuteMinutes(listing, campus);
   return minutes === null ? DATA_UNAVAILABLE : `${minutes} min`;
+};
+
+export const formatValueScore = (value) => {
+  const score = Number(value);
+  return Number.isFinite(score) ? String(score) : DATA_UNAVAILABLE;
 };
 
 export const getListingId = (listing) => listing?._id || listing?.id || "";

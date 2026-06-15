@@ -3,6 +3,7 @@ import {
   formatCommute,
   formatFurnishedStatus,
   formatRent,
+  formatValueScore,
   getAmenities,
   getDescription,
   getListingTitle,
@@ -30,6 +31,7 @@ function ListingDetail({
 }) {
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
+  const valueScore = formatValueScore(listing?.valueScore);
   const safetyClass =
     safetyLevel === DATA_UNAVAILABLE
       ? "unknown"
@@ -87,6 +89,11 @@ function ListingDetail({
             </DetailRow>
             <DetailRow label="Estimated commute">
               {formatCommute(listing, campus)}
+            </DetailRow>
+            <DetailRow label="Value score">
+              <span className={valueScore === DATA_UNAVAILABLE ? "unavailable-data" : ""}>
+                {valueScore}
+              </span>
             </DetailRow>
           </dl>
 

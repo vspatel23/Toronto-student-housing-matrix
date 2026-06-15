@@ -350,6 +350,15 @@ select {
   padding: 0 18px;
 }
 
+select:disabled,
+input:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  color: #6b7280;
+  background: #f3f6fb;
+  opacity: 1;
+}
+
 input[type="number"] {
   height: 48px;
   padding: 0 14px;
@@ -424,6 +433,10 @@ output {
   color: #b7791f;
 }
 
+.helper.info {
+  color: #244497;
+}
+
 .helper.good {
   color: #244497;
 }
@@ -487,16 +500,56 @@ output {
   font-weight: 700;
 }
 
+.status-message.loading,
+.status-message.info,
+.status-message.empty {
+  color: #1f3f8d;
+  background: #eef6ff;
+  border: 1px solid #cfe1ff;
+}
+
 .status-message.success {
   color: #155e3b;
   background: #e8f7ef;
   border: 1px solid #bde8d1;
 }
 
-.status-message.error {
+.status-message.error,
+.status-message.validation {
   color: #9f1239;
   background: #fff1f2;
   border: 1px solid #fecdd3;
+}
+
+.validation-message {
+  margin: 6px 0 0;
+  color: #9f1239;
+  font-size: 0.92rem;
+  font-weight: 750;
+}
+
+.field-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.field-status-row .helper {
+  margin: 0;
+}
+
+.inline-retry-button {
+  min-height: 34px;
+  padding: 0 12px;
+  color: #244497;
+  background: #ffffff;
+  border: 1px solid #bfd0ee;
+  border-radius: 7px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
 }
 
 .submit-button {
@@ -880,7 +933,7 @@ output {
 }
 
 .listing-facts {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .listing-facts div,
@@ -924,6 +977,11 @@ output {
   color: #374151;
   background: #f3f4f6;
   border: 1px solid #e5e7eb;
+}
+
+.unavailable-data {
+  color: #6b7280;
+  font-weight: 700;
 }
 
 .amenities-preview,
@@ -979,6 +1037,11 @@ output {
 .state-panel.error {
   border-color: #fecdd3;
   background: #fff7f8;
+}
+
+.state-panel.empty {
+  border-color: #dce8ff;
+  background: #f8fbff;
 }
 
 .state-actions {
