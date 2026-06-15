@@ -1,6 +1,5 @@
 import { campuses, housingTypes, safetyLevels } from "../utils/constants";
 import { formatDate } from "../utils/api";
-import ResultsList from "./ResultsList";
 
 function SearchForm({
   formData,
@@ -9,8 +8,6 @@ function SearchForm({
   isLoadingSaved,
   savedPreference,
   savedPreferences,
-  hasSearched,
-  listings,
   userName,
   onFieldChange,
   onRentChange,
@@ -183,8 +180,6 @@ function SearchForm({
           </p>
         </section>
       )}
-
-      <ResultsList listings={listings} hasSearched={hasSearched} />
 
       {savedPreferences.length > 0 && (
         <section className="saved-list" aria-label="Previous preferences">

@@ -13,6 +13,8 @@ import Header from "./components/Header";
 import StepProgress from "./components/StepProgress";
 import SearchForm from "./components/SearchForm";
 import HelpCards from "./components/HelpCards";
+import BrowseResults from "./components/BrowseResults";
+import ListingDetail from "./components/ListingDetail";
 
 function App() {
   const [authMode, setAuthMode] = useState("login");
@@ -36,7 +38,21 @@ function App() {
   const [hasLoadedPreferenceIntoForm, setHasLoadedPreferenceIntoForm] =
     useState(false);
   const [listings, setListings] = useState([]);
-  const [hasSearched, setHasSearched] = useState(false);
+  const [activeSearch, setActiveSearch] = useState(null);
+  const [currentView, setCurrentView] = useState("search");
+  const [resultsFilters, setResultsFilters] = useState({
+    minRent: "",
+    maxRent: "",
+    housingType: "All types",
+    safetyLevel: "Any",
+    maxCommute: "",
+  });
+  const [isLoadingResults, setIsLoadingResults] = useState(false);
+  const [resultsError, setResultsError] = useState("");
+  const [selectedListingId, setSelectedListingId] = useState("");
+  const [selectedListing, setSelectedListing] = useState(null);
+  const [isLoadingListing, setIsLoadingListing] = useState(false);
+  const [listingError, setListingError] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
 
@@ -44,6 +60,13 @@ function App() {
     setSavedPreference(null);
     setSavedPreferences([]);
     setStatus({ type: "", message: "" });
+    setListings([]);
+    setActiveSearch(null);
+    setCurrentView("search");
+    setResultsError("");
+    setSelectedListing(null);
+    setSelectedListingId("");
+    setListingError("");
     if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
       setFormData(defaultFormData);
     }
@@ -234,6 +257,37 @@ function App() {
     });
   };
 
+  const getListingQueryParams = (searchData) => ({
+    minRent: searchData.minRent,
+    maxRent: searchData.maxRent,
+    propertyType:
+      searchData.housingType === "All types" ? "" : searchData.housingType,
+    safetyLevel: searchData.safetyLevel === "Any" ? "" : searchData.safetyLevel,
+  });
+
+  const loadListingsForSearch = async (searchData) => {
+    setIsLoadingResults(true);
+    setResultsError("");
+
+    try {
+      const listingData = await apiRequest(
+        "/api/listings",
+        {},
+        getListingQueryParams(searchData),
+      );
+      setListings(listingData.listings || []);
+      return listingData;
+    } catch (error) {
+      setListings([]);
+      setResultsError(
+        "Listings could not be loaded. Please retry or edit your search.",
+      );
+      throw error;
+    } finally {
+      setIsLoadingResults(false);
+    }
+  };
+
   const handleSubmit = async (event) => {
     event.preventDefault();
 
@@ -257,6 +311,8 @@ function App() {
     setIsSaving(true);
     setStatus({ type: "", message: "" });
 
+    const searchSnapshot = { ...formData };
+
     try {
       const preferenceData = await apiRequest("/api/preferences", {
         method: "POST",
@@ -267,29 +323,40 @@ function App() {
         body: JSON.stringify(formData),
       });
 
-      const listingData = await apiRequest("/api/listings", {}, {
-        minRent: formData.minRent,
-        maxRent: formData.maxRent,
-        propertyType:
-          formData.housingType === "All types" ? "" : formData.housingType,
-        safetyLevel: formData.safetyLevel === "Any" ? "" : formData.safetyLevel,
-      });
-
       setSavedPreference(preferenceData.preference);
       setSavedPreferences((currentPreferences) => [
         preferenceData.preference,
         ...currentPreferences,
       ]);
       setHasLoadedPreferenceIntoForm(false);
-      setListings(listingData.listings || []);
-      setHasSearched(true);
+      setActiveSearch(searchSnapshot);
+      setResultsFilters({
+        minRent: searchSnapshot.minRent,
+        maxRent: searchSnapshot.maxRent,
+        housingType: searchSnapshot.housingType,
+        safetyLevel: "Any",
+        maxCommute: searchSnapshot.maxCommute,
+      });
+      setCurrentView("results");
+
+      let listingData = { count: 0 };
+      let listingLoadFailed = false;
+      try {
+        listingData = await loadListingsForSearch(searchSnapshot);
+      } catch {
+        listingLoadFailed = true;
+        listingData = { count: 0 };
+      }
+
       setStatus({
-        type: "success",
+        type: listingLoadFailed ? "error" : "success",
         message:
-          listingData.count > 0
-            ? `Found ${listingData.count} housing listing${
-                listingData.count === 1 ? "" : "s"
-              } and saved your preferences.`
+          listingLoadFailed
+            ? "Your preferences were saved, but listings could not be loaded."
+            : listingData.count > 0
+              ? `Found ${listingData.count} housing listing${
+                  listingData.count === 1 ? "" : "s"
+                } and saved your preferences.`
             : "No matching listings found. Your search preferences were saved.",
       });
     } catch (error) {
@@ -311,6 +378,66 @@ function App() {
     } finally {
       setIsSaving(false);
     }
+  };
+
+  const retryResults = async () => {
+    if (!activeSearch) {
+      setCurrentView("search");
+      return;
+    }
+
+    try {
+      await loadListingsForSearch(activeSearch);
+    } catch {
+      // The browse page already shows a user-friendly error state.
+    }
+  };
+
+  const handleFilterChange = (field, value) => {
+    setResultsFilters((currentFilters) => ({
+      ...currentFilters,
+      [field]: value,
+    }));
+  };
+
+  const openListingDetail = async (listingId) => {
+    if (!listingId) {
+      return;
+    }
+
+    setSelectedListingId(listingId);
+    setSelectedListing(null);
+    setListingError("");
+    setIsLoadingListing(true);
+    setCurrentView("details");
+
+    try {
+      const listing = await apiRequest(`/api/listings/${listingId}`);
+      setSelectedListing(listing);
+    } catch {
+      setListingError(
+        "This listing could not be found or loaded. Please retry or return to results.",
+      );
+    } finally {
+      setIsLoadingListing(false);
+    }
+  };
+
+  const retryListingDetail = () => {
+    if (selectedListingId) {
+      openListingDetail(selectedListingId);
+    }
+  };
+
+  const returnToResults = () => {
+    setCurrentView("results");
+    setListingError("");
+    setIsLoadingListing(false);
+  };
+
+  const returnToSearch = () => {
+    setCurrentView("search");
+    setStatus({ type: "", message: "" });
   };
 
   const loadSavedPreferences = async () => {
@@ -410,35 +537,62 @@ function App() {
   return (
     <main className="app-shell">
       <Header userName={displayName} onLogout={handleLogout} />
-      <StepProgress />
+      <StepProgress currentStep={currentView} />
 
-      <section className="hero-section">
-        <div className="hero-copy">
-          <h1>Compare Housing Beyond Rent</h1>
-          <p>
-            Make informed housing decisions using TTC commute times,
-            neighbourhood safety data, and weighted value scoring.
-          </p>
-        </div>
-      </section>
+      {currentView === "search" && (
+        <>
+          <section className="hero-section">
+            <div className="hero-copy">
+              <h1>Compare Housing Beyond Rent</h1>
+              <p>
+                Make informed housing decisions using TTC commute times,
+                neighbourhood safety data, and listing details in one place.
+              </p>
+            </div>
+          </section>
 
-      <SearchForm
-        formData={formData}
-        status={status}
-        isSaving={isSaving}
-        isLoadingSaved={isLoadingSaved}
-        savedPreference={savedPreference}
-        savedPreferences={savedPreferences}
-        hasSearched={hasSearched}
-        listings={listings}
-        userName={displayName}
-        onFieldChange={updateField}
-        onRentChange={handleRentChange}
-        onSubmit={handleSubmit}
-        onLoadSaved={loadSavedPreferences}
-      />
+          <SearchForm
+            formData={formData}
+            status={status}
+            isSaving={isSaving}
+            isLoadingSaved={isLoadingSaved}
+            savedPreference={savedPreference}
+            savedPreferences={savedPreferences}
+            userName={displayName}
+            onFieldChange={updateField}
+            onRentChange={handleRentChange}
+            onSubmit={handleSubmit}
+            onLoadSaved={loadSavedPreferences}
+          />
 
-      <HelpCards />
+          <HelpCards />
+        </>
+      )}
+
+      {currentView === "results" && (
+        <BrowseResults
+          listings={listings}
+          search={activeSearch}
+          filters={resultsFilters}
+          isLoading={isLoadingResults}
+          errorMessage={resultsError}
+          onFilterChange={handleFilterChange}
+          onDetails={openListingDetail}
+          onEditSearch={returnToSearch}
+          onRetry={retryResults}
+        />
+      )}
+
+      {currentView === "details" && (
+        <ListingDetail
+          listing={selectedListing}
+          campus={activeSearch?.campus}
+          isLoading={isLoadingListing}
+          errorMessage={listingError}
+          onBack={returnToResults}
+          onRetry={retryListingDetail}
+        />
+      )}
     </main>
   );
 }

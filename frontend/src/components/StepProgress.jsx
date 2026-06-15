@@ -1,17 +1,30 @@
-const steps = [
-  { number: 1, label: "⌕ Search", active: true },
-  { number: 2, label: "☷ Browse Results", active: false },
-  { number: 3, label: "▤ View Details", active: false },
-  { number: 4, label: "⌘ Compare", active: false },
+const stepConfig = [
+  { key: "search", number: 1, label: "⌕ Search" },
+  { key: "results", number: 2, label: "☷ Browse Results" },
+  { key: "details", number: 3, label: "▤ View Details" },
+  { key: "compare", number: 4, label: "⌘ Compare" },
 ];
 
-function StepProgress() {
+const activeIndexByStep = {
+  search: 0,
+  results: 1,
+  details: 2,
+  compare: 3,
+};
+
+function StepProgress({ currentStep = "search" }) {
+  const activeIndex = activeIndexByStep[currentStep] ?? 0;
+
   return (
     <nav className="step-nav" aria-label="Search progress">
-      {steps.map((step, index) => (
+      {stepConfig.map((step, index) => (
         <span key={step.number}>
           {index > 0 && <span className="step-line"></span>}
-          <div className={`step${step.active ? " active" : ""}`}>
+          <div
+            className={`step${index === activeIndex ? " active" : ""}${
+              index < activeIndex ? " completed" : ""
+            }`}
+          >
             <span className="step-number">{step.number}</span>
             <span className="step-label">{step.label}</span>
           </div>

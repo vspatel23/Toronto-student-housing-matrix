@@ -47,14 +47,14 @@ export const helpCards = [
   },
   {
     icon: "☷",
-    title: "Value Score",
-    text: "Weighted composite score for objective housing comparison",
+    title: "Browse Results",
+    text: "Responsive listing cards that summarize the key housing details",
     tone: "purple",
   },
   {
     icon: "⌖",
-    title: "Map Visualization",
-    text: "Interactive map showing housing locations across Toronto",
+    title: "Listing Details",
+    text: "Open a listing to review rent, safety, commute, and amenities",
     tone: "orange",
   },
 ];
