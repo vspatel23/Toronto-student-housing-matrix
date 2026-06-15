@@ -1,16 +1,32 @@
 const express = require("express");
 
 const Campus = require("../models/Campus");
+const defaultCampuses = require("../data/defaultCampuses");
 
 const router = express.Router();
+
+const getCampuses = async () => {
+  let campuses = await Campus.find().sort({
+    institution: 1,
+    campusName: 1,
+  });
+
+  if (campuses.length > 0) {
+    return campuses;
+  }
+
+  await Campus.insertMany(defaultCampuses, { ordered: true });
+
+  return Campus.find().sort({
+    institution: 1,
+    campusName: 1,
+  });
+};
 
 // GET /api/campuses
 router.get("/", async (req, res) => {
   try {
-    const campuses = await Campus.find().sort({
-      institution: 1,
-      campusName: 1,
-    });
+    const campuses = await getCampuses();
 
     return res.json({
       count: campuses.length,
