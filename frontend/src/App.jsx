@@ -39,6 +39,7 @@ function App() {
   const [hasSearched, setHasSearched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
+  const [campuses, setCampuses] = useState([]);
 
   const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
     setSavedPreference(null);
@@ -106,6 +107,36 @@ function App() {
       isMounted = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!authUser) return;
+
+    let isMounted = true;
+
+    const fetchCampuses = async () => {
+      try {
+        const data = await apiRequest("/api/campuses");
+        if (isMounted) {
+          const labels = (data.campuses || []).map((c) =>
+            c.institution === c.campusName
+              ? c.campusName
+              : `${c.institution} -- ${c.campusName}`,
+          );
+          setCampuses(labels);
+        }
+      } catch {
+        if (isMounted) {
+          setCampuses([]);
+        }
+      }
+    };
+
+    fetchCampuses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authUser]);
 
   const updateAuthField = (field, value) => {
     setAuthStatus({ type: "", message: "" });
@@ -423,6 +454,7 @@ function App() {
       </section>
 
       <SearchForm
+        campuses={campuses}
         formData={formData}
         status={status}
         isSaving={isSaving}

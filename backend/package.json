@@ -8,7 +8,8 @@
     "dev": "nodemon server.js",
     "check": "node scripts/checkSyntax.js",
     "check:indexes": "node scripts/checkIndexes.js",
-    "seed:listings": "node scripts/seedListings.js"
+    "seed:listings": "node scripts/seedListings.js",
+    "seed:campuses": "node scripts/seedCampuses.js"
   },
   "keywords": [],
   "author": "",

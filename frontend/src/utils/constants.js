@@ -1,15 +1,6 @@
 export const AUTH_TOKEN_KEY = "tshm_auth_token";
 export const AUTH_USER_KEY = "tshm_auth_user";
 
-export const campuses = [
-  "University of Toronto -- St. George",
-  "University of Toronto -- Scarborough",
-  "University of Toronto -- Mississauga",
-  "Toronto Metropolitan University",
-  "York University",
-  "Seneca Polytechnic",
-];
-
 export const housingTypes = [
   "All types",
   "Apartment",

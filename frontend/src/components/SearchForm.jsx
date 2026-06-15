@@ -1,8 +1,9 @@
-import { campuses, housingTypes, safetyLevels } from "../utils/constants";
+import { housingTypes, safetyLevels } from "../utils/constants";
 import { formatDate } from "../utils/api";
 import ResultsList from "./ResultsList";
 
 function SearchForm({
+  campuses,
   formData,
   status,
   isSaving,
