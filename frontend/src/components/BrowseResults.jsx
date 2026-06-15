@@ -4,6 +4,7 @@ import {
   formatCommute,
   formatFurnishedStatus,
   formatRent,
+  formatValueScore,
   getAmenities,
   getCommuteMinutes,
   getListingId,
@@ -12,6 +13,7 @@ import {
   getPropertyType,
   getSafetyLevel,
 } from "../utils/listingFormatters";
+import StatusMessage from "./StatusMessage";
 
 const safetyOptions = ["Any", "Low", "Medium", "High"];
 
@@ -139,6 +141,7 @@ function ListingCard({ listing, campus, onDetails }) {
   const listingId = getListingId(listing);
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
+  const valueScore = formatValueScore(listing?.valueScore);
   const safetyClass =
     safetyLevel === DATA_UNAVAILABLE
       ? "unknown"
@@ -170,6 +173,12 @@ function ListingCard({ listing, campus, onDetails }) {
         <div>
           <dt>Estimated commute</dt>
           <dd>{formatCommute(listing, campus)}</dd>
+        </div>
+        <div>
+          <dt>Value score</dt>
+          <dd className={valueScore === DATA_UNAVAILABLE ? "unavailable-data" : ""}>
+            {valueScore}
+          </dd>
         </div>
       </dl>
 
@@ -280,9 +289,9 @@ function BrowseResults({
       </div>
 
       {isLoading && (
-        <div className="state-panel" role="status">
-          Loading housing results...
-        </div>
+        <StatusMessage type="loading" className="state-panel">
+          Searching for matching listings...
+        </StatusMessage>
       )}
 
       {!isLoading && errorMessage && (
@@ -301,9 +310,9 @@ function BrowseResults({
       )}
 
       {!isLoading && !errorMessage && filteredListings.length === 0 && (
-        <div className="state-panel">
+        <div className="state-panel empty" role="status">
           <h3>No listings found</h3>
-          <p>Adjust your search criteria or refine filters to see more results.</p>
+          <p>No listings match your current preferences. Try adjusting your filters.</p>
           <button type="button" className="secondary-button" onClick={onEditSearch}>
             Edit Search
           </button>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY, defaultFormData } from "./utils/constants";
 import {
@@ -17,6 +17,7 @@ import BrowseResults from "./components/BrowseResults";
 import ListingDetail from "./components/ListingDetail";
 
 function App() {
+  const latestListingsRequestId = useRef(0);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -33,6 +34,7 @@ function App() {
   );
   const [formData, setFormData] = useState(defaultFormData);
   const [status, setStatus] = useState({ type: "", message: "" });
+  const [validationErrors, setValidationErrors] = useState({});
   const [campuses, setCampuses] = useState([]);
   const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
   const [campusError, setCampusError] = useState("");
@@ -56,13 +58,14 @@ function App() {
   const [selectedListing, setSelectedListing] = useState(null);
   const [isLoadingListing, setIsLoadingListing] = useState(false);
   const [listingError, setListingError] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
+  const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
 
   const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
     setSavedPreference(null);
     setSavedPreferences([]);
     setStatus({ type: "", message: "" });
+    setValidationErrors({});
     setListings([]);
     setActiveSearch(null);
     setCurrentView("search");
@@ -155,7 +158,7 @@ function App() {
       } catch {
         if (isMounted) {
           setCampuses([]);
-          setCampusError("Campus options could not be loaded.");
+          setCampusError("We couldn’t load the campus list. Please try again.");
         }
       } finally {
         if (isMounted) {
@@ -249,9 +252,12 @@ function App() {
             : "Login successful.",
       });
     } catch (error) {
+      const authAction = authMode === "register" ? "create your account" : "log you in";
       setAuthStatus({
         type: "error",
-        message: error.message,
+        message: isUnauthorizedError(error)
+          ? "Your email or password was not accepted. Please try again."
+          : `We couldn’t ${authAction}. Please try again.`,
       });
     } finally {
       setIsAuthSubmitting(false);
@@ -268,6 +274,11 @@ function App() {
 
   const updateField = (field, value) => {
     setStatus({ type: "", message: "" });
+    setValidationErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors[field];
+      return nextErrors;
+    });
     setHasLoadedPreferenceIntoForm(false);
     setFormData((currentData) => ({
       ...currentData,
@@ -279,6 +290,12 @@ function App() {
     const numberValue = Number(value);
 
     setStatus({ type: "", message: "" });
+    setValidationErrors((currentErrors) => {
+      const nextErrors = { ...currentErrors };
+      delete nextErrors.minRent;
+      delete nextErrors.maxRent;
+      return nextErrors;
+    });
     setHasLoadedPreferenceIntoForm(false);
     setFormData((currentData) => {
       const nextData = {
@@ -307,8 +324,11 @@ function App() {
   });
 
   const loadListingsForSearch = async (searchData) => {
+    const requestId = latestListingsRequestId.current + 1;
+    latestListingsRequestId.current = requestId;
     setIsLoadingResults(true);
     setResultsError("");
+    setListings([]);
 
     try {
       const listingData = await apiRequest(
@@ -316,21 +336,50 @@ function App() {
         {},
         getListingQueryParams(searchData),
       );
-      setListings(listingData.listings || []);
+      if (requestId === latestListingsRequestId.current) {
+        setListings(listingData.listings || []);
+        setResultsError("");
+      }
       return listingData;
-    } catch (error) {
-      setListings([]);
-      setResultsError(
-        "Listings could not be loaded. Please retry or edit your search.",
-      );
-      throw error;
+    } catch {
+      if (requestId === latestListingsRequestId.current) {
+        setListings([]);
+        setResultsError("We couldn’t load listings right now. Please try again.");
+      }
+      throw new Error("Listings request failed");
     } finally {
-      setIsLoadingResults(false);
+      if (requestId === latestListingsRequestId.current) {
+        setIsLoadingResults(false);
+      }
     }
+  };
+
+  const validateSearchForm = () => {
+    const errors = {};
+    const minRent = Number(formData.minRent);
+    const maxRent = Number(formData.maxRent);
+
+    if (!formData.campus) {
+      errors.campus = "Please select a campus.";
+    }
+
+    if (!Number.isFinite(maxRent)) {
+      errors.maxRent = "Please enter a valid maximum monthly rent.";
+    } else if (maxRent <= 0) {
+      errors.maxRent = "Maximum rent must be greater than zero.";
+    } else if (Number.isFinite(minRent) && maxRent < minRent) {
+      errors.maxRent = "Maximum rent must be greater than or equal to minimum rent.";
+    }
+
+    return errors;
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+
+    if (isSavingPreference || isLoadingResults) {
+      return;
+    }
 
     const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
     if (!authUser || !authToken) {
@@ -341,16 +390,21 @@ function App() {
       return;
     }
 
-    if (!formData.campus) {
-      setStatus({
-        type: "error",
-        message: "Select a campus first.",
-      });
+    const errors = validateSearchForm();
+    if (Object.keys(errors).length > 0) {
+      setValidationErrors(errors);
+      setStatus({ type: "", message: "" });
+      const firstInvalidField = Object.keys(errors)[0];
+      window.setTimeout(() => {
+        document.getElementById(firstInvalidField)?.focus();
+      }, 0);
       return;
     }
 
-    setIsSaving(true);
+    setIsSavingPreference(true);
     setStatus({ type: "", message: "" });
+    setValidationErrors({});
+    setResultsError("");
 
     const searchSnapshot = { ...formData };
 
@@ -369,6 +423,10 @@ function App() {
         preferenceData.preference,
         ...currentPreferences,
       ]);
+      setStatus({
+        type: "success",
+        message: "Your preferences were saved successfully.",
+      });
       setHasLoadedPreferenceIntoForm(false);
       setActiveSearch(searchSnapshot);
       setResultsFilters({
@@ -379,6 +437,7 @@ function App() {
         maxCommute: searchSnapshot.maxCommute,
       });
       setCurrentView("results");
+      setIsSavingPreference(false);
 
       let listingData = { count: 0 };
       let listingLoadFailed = false;
@@ -393,12 +452,12 @@ function App() {
         type: listingLoadFailed ? "error" : "success",
         message:
           listingLoadFailed
-            ? "Your preferences were saved, but listings could not be loaded."
+            ? "Your preferences were saved successfully, but we couldn’t load listings right now. Please try again."
             : listingData.count > 0
               ? `Found ${listingData.count} housing listing${
                   listingData.count === 1 ? "" : "s"
-                } and saved your preferences.`
-            : "No matching listings found. Your search preferences were saved.",
+                } and saved your preferences successfully.`
+            : "Your preferences were saved successfully. No listings match your current preferences. Try adjusting your filters.",
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
@@ -414,10 +473,25 @@ function App() {
 
       setStatus({
         type: "error",
-        message: error.message,
+        message: "We couldn’t save your preferences. Please try again.",
       });
     } finally {
-      setIsSaving(false);
+      setIsSavingPreference(false);
+    }
+  };
+
+  const retryCampuses = async () => {
+    setIsLoadingCampuses(true);
+    setCampusError("");
+
+    try {
+      const data = await apiRequest("/api/campuses");
+      setCampuses(Array.isArray(data.campuses) ? data.campuses : []);
+    } catch {
+      setCampuses([]);
+      setCampusError("We couldn’t load the campus list. Please try again.");
+    } finally {
+      setIsLoadingCampuses(false);
     }
   };
 
@@ -527,7 +601,7 @@ function App() {
         type: preferences.length > 0 ? "success" : "error",
         message:
           preferences.length > 0
-            ? "Loaded your saved preferences."
+            ? "Your saved preferences were loaded."
             : "No saved preferences found for your account.",
       });
     } catch (error) {
@@ -544,7 +618,7 @@ function App() {
 
       setStatus({
         type: "error",
-        message: error.message,
+        message: "We couldn’t load your saved preferences. Please try again.",
       });
     } finally {
       setIsLoadingSaved(false);
@@ -596,10 +670,12 @@ function App() {
             campuses={campuses}
             formData={formData}
             status={status}
-            isSaving={isSaving}
+            isSavingPreference={isSavingPreference}
+            isSearchingListings={isLoadingResults}
             isLoadingCampuses={isLoadingCampuses}
             isLoadingSaved={isLoadingSaved}
             campusError={campusError}
+            validationErrors={validationErrors}
             savedPreference={savedPreference}
             savedPreferences={savedPreferences}
             userName={displayName}
@@ -607,6 +683,7 @@ function App() {
             onRentChange={handleRentChange}
             onSubmit={handleSubmit}
             onLoadSaved={loadSavedPreferences}
+            onRetryCampuses={retryCampuses}
           />
 
           <HelpCards />

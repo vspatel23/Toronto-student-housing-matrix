@@ -1,3 +1,5 @@
+import StatusMessage from "./StatusMessage";
+
 function AuthForm({
   authMode,
   authForm,
@@ -70,9 +72,9 @@ function AuthForm({
           </label>
 
           {authStatus.message && (
-            <div className={`status-message ${authStatus.type}`} role="status">
+            <StatusMessage type={authStatus.type || "info"}>
               {authStatus.message}
-            </div>
+            </StatusMessage>
           )}
 
           <button
