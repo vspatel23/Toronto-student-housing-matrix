@@ -22,9 +22,19 @@ router.get("/", async (req, res) => {
     const filter = { isActive: true };
 
     if (req.query.minRent || req.query.maxRent) {
+      const minRent = Number(req.query.minRent);
+      const maxRent = Number(req.query.maxRent);
+
+      if (req.query.minRent && isNaN(minRent)) {
+        return res.status(400).json({ message: "minRent must be a valid number" });
+      }
+      if (req.query.maxRent && isNaN(maxRent)) {
+        return res.status(400).json({ message: "maxRent must be a valid number" });
+      }
+
       filter.monthlyRent = {};
-      if (req.query.minRent) filter.monthlyRent.$gte = Number(req.query.minRent);
-      if (req.query.maxRent) filter.monthlyRent.$lte = Number(req.query.maxRent);
+      if (req.query.minRent) filter.monthlyRent.$gte = minRent;
+      if (req.query.maxRent) filter.monthlyRent.$lte = maxRent;
     }
 
     if (
@@ -48,7 +58,7 @@ router.get("/", async (req, res) => {
 
     const listings = await HousingListing.find(filter)
       .select(
-        "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities source isActive",
+        "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities valueScore source isActive",
       )
       .sort({ monthlyRent: 1 });
 
