@@ -72,11 +72,14 @@ The backend validation does not start the Express server and does not require a 
 
 ## Deployment Notes
 
-The frontend can be deployed to Vercel or a similar static frontend hosting provider. A minimal `frontend/vercel.json` is included for Vite builds.
+The production frontend is deployed on Vercel:
 
-The backend can be deployed to Render or a similar Node/Express hosting provider. A generic `backend/render.yaml` is included as deployment preparation. Production `MONGO_URI` must be configured in the deployment provider's environment settings and must not be committed to GitHub. Existing local setups that use `MONGODB_URI` are also supported.
+- Frontend: <https://frontend-navy-one-si4pieuraf.vercel.app>
+- Backend API: <https://toronto-student-housing-backend.vercel.app>
 
-For production, set `VITE_API_URL` to the deployed backend API URL so the frontend can communicate with the deployed Express service.
+The frontend Vercel project must use `frontend` as its root directory, `npm run build` as the build command, and `dist` as the output directory. Set `VITE_API_URL` to the deployed backend API URL so the frontend can communicate with the deployed Express service.
+
+The backend can be deployed to Vercel with `backend/vercel.json`, or to Render or a similar Node/Express hosting provider. Production `MONGO_URI` and `JWT_SECRET` must be configured in the deployment provider's environment settings and must not be committed to GitHub. Existing local setups that use `MONGODB_URI` are also supported.
 
 ## Issue Completion Note
 
