@@ -11,6 +11,7 @@ import {
   getLocationLabel,
   getPropertyType,
   getSafetyLevel,
+  getValueScore,
 } from "../utils/listingFormatters";
 
 const safetyOptions = ["Any", "Low", "Medium", "High"];
@@ -139,42 +140,52 @@ function ListingCard({ listing, campus, onDetails }) {
   const listingId = getListingId(listing);
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
+  const valueScore = getValueScore(listing, campus);
   const safetyClass =
     safetyLevel === DATA_UNAVAILABLE
       ? "unknown"
       : safetyLevel.toLowerCase().replace(/\s+/g, "-");
 
   return (
-    <article className="listing-card">
+    <article className="listing-card" tabIndex="0">
       <div className="listing-card-heading">
         <h3>{getListingTitle(listing)}</h3>
+        <span className="score-badge">{valueScore}/100</span>
+      </div>
+
+      <div className="listing-meta-row">
         {getPropertyType(listing) !== DATA_UNAVAILABLE && (
           <span className="type-badge">{getPropertyType(listing)}</span>
         )}
+        <span className={`safety-badge ${safetyClass}`}>{safetyLevel}</span>
       </div>
 
-      <p className="listing-rent">{formatRent(listing?.monthlyRent ?? listing?.rent)}</p>
+      <p className="listing-rent">
+        {formatRent(listing?.monthlyRent ?? listing?.rent)}
+      </p>
       <p className="listing-location">{getLocationLabel(listing)}</p>
 
       <dl className="listing-facts">
         <div>
-          <dt>Furnished</dt>
-          <dd>{formatFurnishedStatus(listing?.furnished)}</dd>
-        </div>
-        <div>
-          <dt>Safety</dt>
-          <dd>
-            <span className={`safety-badge ${safetyClass}`}>{safetyLevel}</span>
-          </dd>
+          <dt>Neighbourhood</dt>
+          <dd>{getLocationLabel(listing)}</dd>
         </div>
         <div>
           <dt>Estimated commute</dt>
           <dd>{formatCommute(listing, campus)}</dd>
         </div>
+        <div>
+          <dt>Furnished</dt>
+          <dd>{formatFurnishedStatus(listing?.furnished)}</dd>
+        </div>
       </dl>
 
       {amenities.length > 0 && (
-        <p className="amenities-preview">{amenities.slice(0, 3).join(", ")}</p>
+        <ul className="chip-list" aria-label="Amenities">
+          {amenities.slice(0, 4).map((amenity) => (
+            <li key={amenity}>{amenity}</li>
+          ))}
+        </ul>
       )}
 
       {hasValue(listing?.description) && (
@@ -280,8 +291,12 @@ function BrowseResults({
       </div>
 
       {isLoading && (
-        <div className="state-panel" role="status">
-          Loading housing results...
+        <div className="state-panel loading-state" role="status">
+          <span className="spinner" aria-hidden="true"></span>
+          <div>
+            <h3>Finding housing matches</h3>
+            <p>Checking listings that fit your rent, commute, and safety needs.</p>
+          </div>
         </div>
       )}
 
@@ -301,9 +316,12 @@ function BrowseResults({
       )}
 
       {!isLoading && !errorMessage && filteredListings.length === 0 && (
-        <div className="state-panel">
-          <h3>No listings found</h3>
-          <p>Adjust your search criteria or refine filters to see more results.</p>
+        <div className="state-panel empty-state">
+          <h3>No listings match these filters</h3>
+          <p>
+            Try widening the rent range, commute time, or housing type to see
+            more options.
+          </p>
           <button type="button" className="secondary-button" onClick={onEditSearch}>
             Edit Search
           </button>
