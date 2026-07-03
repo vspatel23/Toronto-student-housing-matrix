@@ -35,6 +35,12 @@ app.use(
         /^https:\/\/frontend(?:-[a-z0-9-]+)?\.vercel\.app$/.test(origin) ||
         /^https:\/\/frontend-[a-z0-9-]+-vspatel23s-projects\.vercel\.app$/.test(
           origin,
+        ) ||
+        /^https:\/\/torontostudenthousingmatrix(?:-[a-z0-9-]+)?\.vercel\.app$/.test(
+          origin,
+        ) ||
+        /^https:\/\/torontostudenthousingmatrix-[a-z0-9-]+-vspatel23s-projects\.vercel\.app$/.test(
+          origin,
         )
       ) {
         callback(null, true);
