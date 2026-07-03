@@ -104,6 +104,11 @@ function ListingDetail({
             <DetailRow label="Furnished status">
               {formatFurnishedStatus(listing.furnished)}
             </DetailRow>
+            <DetailRow label="Value score">
+              <span className={valueScore === DATA_UNAVAILABLE ? "unavailable-data" : ""}>
+                {valueScore}
+              </span>
+            </DetailRow>
           </dl>
 
           <section className="detail-section" aria-labelledby="amenities-title">
