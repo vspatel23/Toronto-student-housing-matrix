@@ -88,3 +88,105 @@ export const formatValueScore = (value) => {
 };
 
 export const getListingId = (listing) => listing?._id || listing?.id || "";
+
+const clampScore = (score) =>
+  Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+
+const getProvidedValueScore = (listing) => {
+  const rawScore =
+    listing?.valueScore?.overall ??
+    listing?.valueScore?.score ??
+    listing?.valueScore ??
+    listing?.score;
+  const score = Number(rawScore);
+
+  return Number.isFinite(score) ? clampScore(score) : null;
+};
+
+const getRentNumber = (listing) => {
+  const rent = Number(listing?.monthlyRent ?? listing?.rent);
+  return Number.isFinite(rent) && rent >= 0 ? rent : null;
+};
+
+const getAffordabilityScore = (listing) => {
+  const rent = getRentNumber(listing);
+
+  if (rent === null) {
+    return 50;
+  }
+
+  if (rent <= 1000) {
+    return 100;
+  }
+
+  if (rent >= 3000) {
+    return 20;
+  }
+
+  return clampScore(100 - ((rent - 1000) / 2000) * 80);
+};
+
+const getCommuteScore = (listing, campus) => {
+  const minutes = getCommuteMinutes(listing, campus);
+
+  if (minutes === null) {
+    return 50;
+  }
+
+  if (minutes <= 15) {
+    return 100;
+  }
+
+  if (minutes >= 60) {
+    return 30;
+  }
+
+  return clampScore(100 - ((minutes - 15) / 45) * 70);
+};
+
+const getSafetyScore = (listing) => {
+  const safetyLevel = getSafetyLevel(listing).toLowerCase();
+
+  if (safetyLevel.includes("low")) {
+    return 100;
+  }
+
+  if (safetyLevel.includes("medium")) {
+    return 72;
+  }
+
+  if (safetyLevel.includes("high")) {
+    return 42;
+  }
+
+  return 55;
+};
+
+const getAmenitiesScore = (listing) =>
+  clampScore(Math.min(getAmenities(listing).length * 12.5, 100));
+
+export const getValueScoreBreakdown = (listing, campus) => ({
+  affordability: getAffordabilityScore(listing),
+  commute: getCommuteScore(listing, campus),
+  safety: getSafetyScore(listing),
+  amenities: getAmenitiesScore(listing),
+});
+
+export const getValueScore = (listing, campus) => {
+  const providedScore = getProvidedValueScore(listing);
+
+  if (providedScore !== null) {
+    return providedScore;
+  }
+
+  const breakdown = getValueScoreBreakdown(listing, campus);
+
+  // Phase 0 fallback only: affordability 35%, commute 25%, safety 25%,
+  // amenities 15%. Backend valueScore wins when it exists.
+  return clampScore(
+    breakdown.affordability * 0.35 +
+      breakdown.commute * 0.25 +
+      breakdown.safety * 0.25 +
+      breakdown.amenities * 0.15,
+  );
+};

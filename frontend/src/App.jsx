@@ -158,7 +158,9 @@ function App() {
       } catch {
         if (isMounted) {
           setCampuses([]);
-          setCampusError("We couldn’t load the campus list. Please try again.");
+          setCampusError(
+            "We could not load campus options right now. Please try again shortly.",
+          );
         }
       } finally {
         if (isMounted) {
@@ -341,12 +343,14 @@ function App() {
         setResultsError("");
       }
       return listingData;
-    } catch {
+    } catch (error) {
       if (requestId === latestListingsRequestId.current) {
         setListings([]);
-        setResultsError("We couldn’t load listings right now. Please try again.");
+        setResultsError(
+          "We could not load listings right now. Please retry or edit your search.",
+        );
       }
-      throw new Error("Listings request failed");
+      throw error;
     } finally {
       if (requestId === latestListingsRequestId.current) {
         setIsLoadingResults(false);
@@ -551,6 +555,12 @@ function App() {
   };
 
   const returnToSearch = () => {
+    if (activeSearch) {
+      setFormData((currentData) => ({
+        ...currentData,
+        ...activeSearch,
+      }));
+    }
     setCurrentView("search");
     setStatus({ type: "", message: "" });
   };
