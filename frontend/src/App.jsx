@@ -318,6 +318,7 @@ function App() {
   };
 
   const getListingQueryParams = (searchData) => ({
+    campus: searchData.campus,
     minRent: searchData.minRent,
     maxRent: searchData.maxRent,
     propertyType:
@@ -531,7 +532,11 @@ function App() {
     setCurrentView("details");
 
     try {
-      const listing = await apiRequest(`/api/listings/${listingId}`);
+      const listing = await apiRequest(
+        `/api/listings/${listingId}`,
+        {},
+        { campus: activeSearch?.campus },
+      );
       setSelectedListing(listing);
     } catch {
       setListingError(

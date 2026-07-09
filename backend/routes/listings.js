@@ -2,6 +2,10 @@ const express = require("express");
 const mongoose = require("mongoose");
 const router = express.Router();
 const HousingListing = require("../models/HousingListing");
+const {
+  calculateValueScore,
+  calculateValueScoreBreakdown,
+} = require("../utils/valueScore");
 
 const propertyTypes = [
   "Apartment",
@@ -17,7 +21,7 @@ const safetyLevelMap = {
 };
 
 // GET /api/listings
-// Query params: minRent, maxRent, propertyType
+// Query params: minRent, maxRent, propertyType, safetyLevel, campus
 router.get("/", async (req, res) => {
   try {
     const filter = { isActive: true };
@@ -57,13 +61,49 @@ router.get("/", async (req, res) => {
       }
     }
 
-    const listings = await HousingListing.find(filter)
-      .select(
-        "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities valueScore source isActive",
-      )
-      .sort({ monthlyRent: 1 });
+    const listings = await HousingListing.find(filter).select(
+      "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities valueScore source isActive",
+    );
 
-    res.json({ count: listings.length, listings });
+    const scoredListings = listings
+      .map((listing) => {
+        const listingObject = listing.toObject();
+
+        return {
+          ...listingObject,
+          valueScore: calculateValueScore(listingObject, req.query.campus),
+          valueScoreBreakdown: calculateValueScoreBreakdown(
+            listingObject,
+            req.query.campus,
+          ),
+        };
+      })
+      .sort((firstListing, secondListing) => {
+        const scoreDifference =
+          secondListing.valueScore - firstListing.valueScore;
+
+        if (scoreDifference !== 0) {
+          return scoreDifference;
+        }
+
+        const firstRent = Number.isFinite(Number(firstListing.monthlyRent))
+          ? Number(firstListing.monthlyRent)
+          : Number.POSITIVE_INFINITY;
+        const secondRent = Number.isFinite(Number(secondListing.monthlyRent))
+          ? Number(secondListing.monthlyRent)
+          : Number.POSITIVE_INFINITY;
+        const rentDifference = firstRent - secondRent;
+
+        if (rentDifference !== 0) {
+          return rentDifference;
+        }
+
+        return String(firstListing.title || "").localeCompare(
+          String(secondListing.title || ""),
+        );
+      });
+
+    res.json({ count: scoredListings.length, listings: scoredListings });
   } catch (err) {
     res.status(500).json({ message: "Server error", error: err.message });
   }
@@ -80,7 +120,16 @@ router.get("/:id", async (req, res) => {
     if (!listing) {
       return res.status(404).json({ message: "Listing not found" });
     }
-    res.json(listing);
+
+    const listingObject = listing.toObject();
+    res.json({
+      ...listingObject,
+      valueScore: calculateValueScore(listingObject, req.query.campus),
+      valueScoreBreakdown: calculateValueScoreBreakdown(
+        listingObject,
+        req.query.campus,
+      ),
+    });
   } catch (err) {
     res.status(500).json({ message: "Server error" });
   }
