@@ -67,11 +67,17 @@ export const getCommuteMinutes = (listing, campus) => {
   }
 
   const normalizedCampus = normalizeCampusName(campus);
-  const commute = normalizedCampus
-    ? listing.commuteEstimates.find(
-        (estimate) => normalizeCampusName(estimate?.campus) === normalizedCampus,
-      )
-    : listing.commuteEstimates[0];
+  let commute = null;
+
+  if (normalizedCampus) {
+    commute = listing.commuteEstimates.find(
+      (estimate) => normalizeCampusName(estimate?.campus) === normalizedCampus,
+    );
+  }
+
+  if (!commute) {
+    commute = listing.commuteEstimates[0];
+  }
 
   const minutes = Number(commute?.minutes);
   return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
@@ -145,6 +151,16 @@ const getCommuteScore = (listing, campus) => {
 };
 
 const getSafetyScore = (listing) => {
+  const numericSafetyScore = Number(listing?.safety?.safetyScore);
+
+  if (
+    Number.isFinite(numericSafetyScore) &&
+    numericSafetyScore >= 0 &&
+    numericSafetyScore <= 100
+  ) {
+    return clampScore(numericSafetyScore);
+  }
+
   const safetyLevel = getSafetyLevel(listing).toLowerCase();
 
   if (safetyLevel.includes("low")) {
@@ -165,12 +181,23 @@ const getSafetyScore = (listing) => {
 const getAmenitiesScore = (listing) =>
   clampScore(Math.min(getAmenities(listing).length * 12.5, 100));
 
-export const getValueScoreBreakdown = (listing, campus) => ({
-  affordability: getAffordabilityScore(listing),
-  commute: getCommuteScore(listing, campus),
-  safety: getSafetyScore(listing),
-  amenities: getAmenitiesScore(listing),
-});
+export const getValueScoreBreakdown = (listing, campus) => {
+  if (listing?.valueScoreBreakdown) {
+    return {
+      affordability: clampScore(listing.valueScoreBreakdown.affordability),
+      commute: clampScore(listing.valueScoreBreakdown.commute),
+      safety: clampScore(listing.valueScoreBreakdown.safety),
+      amenities: clampScore(listing.valueScoreBreakdown.amenities),
+    };
+  }
+
+  return {
+    affordability: getAffordabilityScore(listing),
+    commute: getCommuteScore(listing, campus),
+    safety: getSafetyScore(listing),
+    amenities: getAmenitiesScore(listing),
+  };
+};
 
 export const getValueScore = (listing, campus) => {
   const providedScore = getProvidedValueScore(listing);
