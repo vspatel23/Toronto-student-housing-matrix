@@ -861,6 +861,69 @@ output {
   margin: 30px 0 18px;
 }
 
+.recommendation-summary {
+  display: grid;
+  gap: 16px;
+  margin-top: 22px;
+  padding: 22px;
+  text-align: left;
+  background: #f8fbff;
+  border: 1px solid #cfe1ff;
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.05);
+}
+
+.recommendation-summary-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recommendation-summary-eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  color: #1f4b99;
+  font-size: 0.82rem;
+  font-weight: 850;
+}
+
+.recommendation-summary-title {
+  margin: 0;
+  color: #111827;
+  font-size: 1.3rem;
+  line-height: 1.25;
+}
+
+.recommendation-summary-copy {
+  margin: 0;
+  color: #374151;
+  line-height: 1.6;
+}
+
+.recommendation-score-pill {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 12px;
+  color: #0f3b2e;
+  background: #dff8ec;
+  border: 1px solid #b9ebd3;
+  border-radius: 999px;
+  font-size: 0.92rem;
+  font-weight: 850;
+}
+
+.recommendation-reasons {
+  display: grid;
+  gap: 8px;
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: #374151;
+  line-height: 1.5;
+}
+
 .listing-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1174,6 +1237,7 @@ output {
 
   .active-search-bar,
   .results-title-row,
+  .recommendation-summary-header,
   .listing-card-heading,
   .detail-heading {
     align-items: stretch;

@@ -1,4 +1,5 @@
 import { housingTypes } from "../utils/constants";
+import RecommendationSummary from "./RecommendationSummary";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -278,6 +279,13 @@ function BrowseResults({
       </div>
 
       <ResultsFilters filters={filters} onChange={onFilterChange} />
+
+      {!isLoading && !errorMessage && filteredListings.length > 0 && (
+        <RecommendationSummary
+          listings={filteredListings}
+          campus={search?.campus}
+        />
+      )}
 
       <div className="results-title-row">
         <div>
