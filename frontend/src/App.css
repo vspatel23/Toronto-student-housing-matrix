@@ -1091,6 +1091,40 @@ output {
   border: 1px solid #bfd0ee;
 }
 
+.save-toggle-button {
+  min-height: 44px;
+  padding: 0 16px;
+  border-radius: 8px;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+  color: #244497;
+  background: #ffffff;
+  border: 1px solid #bfd0ee;
+}
+
+.save-toggle-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.save-toggle-button.saved {
+  color: #92400e;
+  background: #fef3c7;
+  border-color: #fde68a;
+}
+
+.listing-card-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: auto;
+}
+
+.listing-card-actions .details-button {
+  flex: 1;
+  margin-top: 0;
+}
+
 .state-panel {
   padding: 28px;
   border-radius: 10px;
@@ -1681,6 +1715,17 @@ input[type="range"] {
   color: #111827;
 }
 
+.detail-hero-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.detail-hero-actions .save-toggle-button {
+  min-width: 148px;
+}
+
 .value-score-card {
   min-width: 148px;
   padding: 18px;
@@ -1702,6 +1747,14 @@ input[type="range"] {
   color: #0f3b2e;
   font-size: 2.4rem;
   line-height: 1;
+}
+
+.commute-campus-label {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 500;
 }
 
 .quick-stats,

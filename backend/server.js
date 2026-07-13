@@ -8,6 +8,7 @@ const preferenceRoutes = require("./routes/preferences");
 const listingsRoutes = require("./routes/listings");
 const campusRoutes = require("./routes/campuses");
 const analyticsRoutes = require("./routes/analytics");
+const savedListingsRoutes = require("./routes/savedListings");
 
 const app = express();
 
@@ -60,6 +61,7 @@ app.use("/api/preferences", preferenceRoutes);
 app.use("/api/listings", listingsRoutes);
 app.use("/api/campuses", campusRoutes);
 app.use("/api/analytics", analyticsRoutes);
+app.use("/api/saved-listings", savedListingsRoutes);
 
 app.get("/", (req, res) => {
   res.json({
