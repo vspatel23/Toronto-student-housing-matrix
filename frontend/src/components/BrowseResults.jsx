@@ -555,13 +555,10 @@ function BrowseResults({
       return false;
     }
 
-    if (
-      maxCommute !== null &&
-      Number.isFinite(maxCommute) &&
-      commuteMinutes !== null &&
-      commuteMinutes > maxCommute
-    ) {
-      return false;
+    if (maxCommute !== null && Number.isFinite(maxCommute)) {
+      if (commuteMinutes === null || commuteMinutes > maxCommute) {
+        return false;
+      }
     }
 
     if (filters.furnished === "Furnished" && listing?.furnished !== true) {

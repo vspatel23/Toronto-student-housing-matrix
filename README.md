@@ -76,6 +76,10 @@ The workflow validates:
 
 The backend validation does not start the Express server and does not require a live MongoDB connection, so CI can run without committing or exposing database credentials.
 
+## Sprint 3 Demo Scenarios
+
+Commute validation scenarios are documented in [`docs/sprint-3-commute-validation-scenarios.md`](docs/sprint-3-commute-validation-scenarios.md). These scenarios show how commute time affects ranking, filtering, Value Score, recommendations, and comparison during the Sprint 3 review.
+
 ## Deployment Notes
 
 The production frontend is deployed on Vercel:
