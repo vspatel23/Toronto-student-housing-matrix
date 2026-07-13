@@ -120,6 +120,9 @@ function ListingDetail({
             </DetailRow>
             <DetailRow label="Estimated commute">
               {formatCommute(listing, campus)}
+              {campus && (
+                <small className="commute-campus-label">to {campus}</small>
+              )}
             </DetailRow>
             <DetailRow label="Safety level">
               <span className={`safety-badge ${safetyClass}`}>{safetyLevel}</span>
@@ -150,9 +153,11 @@ function ListingDetail({
           <section className="detail-section" aria-labelledby="commute-title">
             <h3 id="commute-title">Estimated Commute</h3>
             <p>
-              Estimated TTC commute is matched to your selected campus when
-              available. Use it as a planning estimate and confirm the route
-              before signing a lease.
+              {campus
+                ? `This is the estimated TTC commute from this listing to ${campus}. `
+                : "Estimated TTC commute is matched to your selected campus when available. "}
+              Use it as a planning estimate and confirm the route before
+              signing a lease.
             </p>
           </section>
 

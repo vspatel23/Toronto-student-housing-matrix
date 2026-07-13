@@ -1749,6 +1749,14 @@ input[type="range"] {
   line-height: 1;
 }
 
+.commute-campus-label {
+  display: block;
+  margin-top: 4px;
+  color: #6b7280;
+  font-size: 0.82rem;
+  font-weight: 500;
+}
+
 .quick-stats,
 .score-breakdown-grid {
   display: grid;
