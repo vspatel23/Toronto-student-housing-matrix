@@ -1,4 +1,6 @@
 import { housingTypes } from "../utils/constants";
+import { getRecommendationBadgesByListingId } from "../utils/recommendationBadges";
+import ListingBadges from "./ListingBadges";
 import RecommendationSummary from "./RecommendationSummary";
 import {
   DATA_UNAVAILABLE,
@@ -140,6 +142,7 @@ function ResultsFilters({ filters, onChange }) {
 export function ListingCard({
   listing,
   campus,
+  badges = [],
   onDetails,
   isSaved = false,
   isSaving = false,
@@ -160,6 +163,8 @@ export function ListingCard({
         <h3>{getListingTitle(listing)}</h3>
         <span className="score-badge">{valueScore}/100</span>
       </div>
+
+      <ListingBadges badges={badges} />
 
       <div className="listing-meta-row">
         {getPropertyType(listing) !== DATA_UNAVAILABLE && (
@@ -281,6 +286,10 @@ function BrowseResults({
 
     return true;
   });
+  const badgesByListingId = getRecommendationBadgesByListingId(
+    filteredListings,
+    search?.campus,
+  );
 
   return (
     <section className="browse-page" aria-labelledby="results-title">
@@ -369,6 +378,7 @@ function BrowseResults({
               key={getListingId(listing)}
               listing={listing}
               campus={search?.campus}
+              badges={badgesByListingId[getListingId(listing)] || []}
               onDetails={onDetails}
               isSaved={savedListingIds?.has(getListingId(listing))}
               isSaving={savingListingIds?.has(getListingId(listing))}
