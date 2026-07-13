@@ -15,6 +15,7 @@ import SearchForm from "./components/SearchForm";
 import HelpCards from "./components/HelpCards";
 import BrowseResults from "./components/BrowseResults";
 import ListingDetail from "./components/ListingDetail";
+import SavedListings from "./components/SavedListings";
 
 function App() {
   const latestListingsRequestId = useRef(0);
@@ -60,6 +61,12 @@ function App() {
   const [listingError, setListingError] = useState("");
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
+  const [savedListings, setSavedListings] = useState([]);
+  const [savedListingIds, setSavedListingIds] = useState(() => new Set());
+  const [savingListingIds, setSavingListingIds] = useState(() => new Set());
+  const [isLoadingSavedListings, setIsLoadingSavedListings] = useState(false);
+  const [savedListingsError, setSavedListingsError] = useState("");
+  const [listingDetailOrigin, setListingDetailOrigin] = useState("results");
 
   const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
     setSavedPreference(null);
@@ -76,6 +83,11 @@ function App() {
     setSelectedListing(null);
     setSelectedListingId("");
     setListingError("");
+    setSavedListings([]);
+    setSavedListingIds(new Set());
+    setSavingListingIds(new Set());
+    setSavedListingsError("");
+    setListingDetailOrigin("results");
     if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
       setFormData(defaultFormData);
     }
@@ -175,6 +187,172 @@ function App() {
       isMounted = false;
     };
   }, [authUser]);
+
+  const loadSavedListings = async () => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    setIsLoadingSavedListings(true);
+    setSavedListingsError("");
+
+    try {
+      const data = await apiRequest("/api/saved-listings", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      const listings = data.listings || [];
+      setSavedListings(listings);
+      setSavedListingIds(new Set(listings.map((listing) => listing._id)));
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        clearDisplayedPreferences({ resetLoadedForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setSavedListingsError(
+        "We could not load your saved listings right now. Please try again.",
+      );
+    } finally {
+      setIsLoadingSavedListings(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadInitialSavedListings = async () => {
+      const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!authToken) {
+        return;
+      }
+
+      setIsLoadingSavedListings(true);
+      setSavedListingsError("");
+
+      try {
+        const data = await apiRequest("/api/saved-listings", {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        if (isMounted) {
+          const listings = data.listings || [];
+          setSavedListings(listings);
+          setSavedListingIds(new Set(listings.map((listing) => listing._id)));
+        }
+      } catch {
+        if (isMounted) {
+          setSavedListingsError(
+            "We could not load your saved listings right now. Please try again.",
+          );
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoadingSavedListings(false);
+        }
+      }
+    };
+
+    loadInitialSavedListings();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authUser]);
+
+  const toggleSavedListing = async (listingId) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken || !listingId) {
+      return;
+    }
+
+    if (savingListingIds.has(listingId)) {
+      return;
+    }
+
+    const wasSaved = savedListingIds.has(listingId);
+
+    setSavingListingIds((current) => new Set(current).add(listingId));
+    setSavedListingIds((current) => {
+      const next = new Set(current);
+      if (wasSaved) {
+        next.delete(listingId);
+      } else {
+        next.add(listingId);
+      }
+      return next;
+    });
+
+    try {
+      if (wasSaved) {
+        await apiRequest(`/api/saved-listings/${listingId}`, {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        setSavedListings((current) =>
+          current.filter((listing) => listing._id !== listingId),
+        );
+      } else {
+        await apiRequest("/api/saved-listings", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ listingId }),
+        });
+        await loadSavedListings();
+      }
+    } catch (error) {
+      setSavedListingIds((current) => {
+        const next = new Set(current);
+        if (wasSaved) {
+          next.add(listingId);
+        } else {
+          next.delete(listingId);
+        }
+        return next;
+      });
+
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        clearDisplayedPreferences({ resetLoadedForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+
+      setStatus({
+        type: "error",
+        message: wasSaved
+          ? "We couldn't remove this listing from your saved list. Please try again."
+          : "We couldn't save this listing. Please try again.",
+      });
+    } finally {
+      setSavingListingIds((current) => {
+        const next = new Set(current);
+        next.delete(listingId);
+        return next;
+      });
+    }
+  };
 
   const updateAuthField = (field, value) => {
     setAuthStatus({ type: "", message: "" });
@@ -525,6 +703,9 @@ function App() {
       return;
     }
 
+    setListingDetailOrigin(
+      currentView === "saved" ? "saved" : "results",
+    );
     setSelectedListingId(listingId);
     setSelectedListing(null);
     setListingError("");
@@ -554,9 +735,18 @@ function App() {
   };
 
   const returnToResults = () => {
-    setCurrentView("results");
+    setCurrentView(listingDetailOrigin);
     setListingError("");
     setIsLoadingListing(false);
+  };
+
+  const openSavedListings = () => {
+    setStatus({ type: "", message: "" });
+    setCurrentView("saved");
+  };
+
+  const returnFromSavedListings = () => {
+    setCurrentView(activeSearch ? "results" : "search");
   };
 
   const returnToSearch = () => {
@@ -666,8 +856,12 @@ function App() {
 
   return (
     <main className="app-shell">
-      <Header userName={displayName} onLogout={handleLogout} />
-      <StepProgress currentStep={currentView} />
+      <Header
+        userName={displayName}
+        onLogout={handleLogout}
+        onOpenSaved={openSavedListings}
+      />
+      {currentView !== "saved" && <StepProgress currentStep={currentView} />}
 
       {currentView === "search" && (
         <>
@@ -716,6 +910,23 @@ function App() {
           onDetails={openListingDetail}
           onEditSearch={returnToSearch}
           onRetry={retryResults}
+          savedListingIds={savedListingIds}
+          savingListingIds={savingListingIds}
+          onToggleSave={toggleSavedListing}
+        />
+      )}
+
+      {currentView === "saved" && (
+        <SavedListings
+          listings={savedListings}
+          isLoading={isLoadingSavedListings}
+          errorMessage={savedListingsError}
+          onDetails={openListingDetail}
+          onBack={returnFromSavedListings}
+          onRetry={loadSavedListings}
+          savedListingIds={savedListingIds}
+          savingListingIds={savingListingIds}
+          onToggleSave={toggleSavedListing}
         />
       )}
 
@@ -727,6 +938,9 @@ function App() {
           errorMessage={listingError}
           onBack={returnToResults}
           onRetry={retryListingDetail}
+          isSaved={savedListingIds.has(selectedListingId)}
+          isSaving={savingListingIds.has(selectedListingId)}
+          onToggleSave={toggleSavedListing}
         />
       )}
     </main>

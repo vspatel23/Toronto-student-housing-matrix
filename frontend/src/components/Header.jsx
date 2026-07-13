@@ -1,4 +1,4 @@
-function Header({ userName, onLogout }) {
+function Header({ userName, onLogout, onOpenSaved }) {
   return (
     <header className="topbar">
       <div className="brand">
@@ -10,6 +10,11 @@ function Header({ userName, onLogout }) {
       <div className="topbar-actions">
         <p>Academic Decision-Support System</p>
         <div className="header-account">
+          {onOpenSaved && (
+            <button type="button" onClick={onOpenSaved}>
+              ★ Saved Listings
+            </button>
+          )}
           <span>{userName}</span>
           <button type="button" onClick={onLogout}>
             Logout
