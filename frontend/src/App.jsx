@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
 import { AUTH_TOKEN_KEY, AUTH_USER_KEY, defaultFormData } from "./utils/constants";
+import { getCampusLabel } from "./utils/campusFormatters";
 import {
   getStoredAuthUser,
   clearAuthStorage,
@@ -939,6 +940,10 @@ function App() {
   }
 
   const displayName = authUser.name || authUser.email;
+  const selectedCampus =
+    campuses.find(
+      (campus) => getCampusLabel(campus) === activeSearch?.campus,
+    ) || null;
 
   return (
     <main className="app-shell">
@@ -991,6 +996,7 @@ function App() {
         <BrowseResults
           listings={listings}
           search={activeSearch}
+          selectedCampus={selectedCampus}
           filters={resultsFilters}
           isLoading={isLoadingResults}
           errorMessage={resultsError}

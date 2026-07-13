@@ -47,6 +47,12 @@ npm run dev
 
 The frontend reads `VITE_API_URL` to connect to the backend API. For local development, the example value points to `http://localhost:5000`.
 
+### Interactive Results Map
+
+The Browse Results page uses React Leaflet to visualize listings and the selected campus. Set `VITE_MAPTILER_KEY` in the frontend environment to enable MapTiler raster tiles. When the key is omitted, the frontend uses OpenStreetMap tiles as a development fallback so local builds and CI are not blocked.
+
+Configure the MapTiler key in the frontend deployment environment only. Because Vite embeds browser environment variables at build time, redeploy the frontend after adding or changing `VITE_MAPTILER_KEY`.
+
 ## Environment Variables
 
 Environment examples are provided in:

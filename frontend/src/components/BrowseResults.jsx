@@ -1,6 +1,8 @@
+import { useRef, useState } from "react";
 import { housingTypes } from "../utils/constants";
 import { getRecommendationBadgesByListingId } from "../utils/recommendationBadges";
 import ListingBadges from "./ListingBadges";
+import ListingsMap from "./ListingsMap";
 import RecommendationSummary from "./RecommendationSummary";
 import {
   DATA_UNAVAILABLE,
@@ -144,6 +146,9 @@ export function ListingCard({
   campus,
   badges = [],
   onDetails,
+  isActive = false,
+  onSelect,
+  cardRef,
   isSaved = false,
   isSaving = false,
   onToggleSave,
@@ -156,9 +161,41 @@ export function ListingCard({
     safetyLevel === DATA_UNAVAILABLE
       ? "unknown"
       : safetyLevel.toLowerCase().replace(/\s+/g, "-");
+  const selectCard = () => {
+    if (listingId) {
+      onSelect?.(listingId);
+    }
+  };
+  const handleCardKeyDown = (event) => {
+    const isNestedButton = event.target?.closest?.("button");
+
+    if (isNestedButton) {
+      return;
+    }
+
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      selectCard();
+    }
+  };
 
   return (
-    <article className="listing-card" tabIndex="0">
+    <article
+      ref={cardRef}
+      aria-current={isActive ? "true" : undefined}
+      aria-label={`${getListingTitle(listing)} listing card${
+        isActive ? ", selected" : ""
+      }`}
+      className={`listing-card${isActive ? " active" : ""}`}
+      onClick={selectCard}
+      onFocus={(event) => {
+        if (event.target === event.currentTarget) {
+          selectCard();
+        }
+      }}
+      onKeyDown={handleCardKeyDown}
+      tabIndex="0"
+    >
       <div className="listing-card-heading">
         <h3>{getListingTitle(listing)}</h3>
         <span className="score-badge">{valueScore}/100</span>
@@ -210,7 +247,10 @@ export function ListingCard({
           type="button"
           className="details-button"
           disabled={!listingId}
-          onClick={() => onDetails(listingId)}
+          onClick={(event) => {
+            event.stopPropagation();
+            onDetails(listingId);
+          }}
         >
           Details
         </button>
@@ -223,7 +263,10 @@ export function ListingCard({
             aria-label={
               isSaved ? "Remove listing from saved listings" : "Save listing"
             }
-            onClick={() => onToggleSave(listingId)}
+            onClick={(event) => {
+              event.stopPropagation();
+              onToggleSave(listingId);
+            }}
           >
             {isSaved ? "★ Saved" : "☆ Save"}
           </button>
@@ -236,6 +279,7 @@ export function ListingCard({
 function BrowseResults({
   listings,
   search,
+  selectedCampus,
   filters,
   isLoading,
   errorMessage,
@@ -247,6 +291,12 @@ function BrowseResults({
   savingListingIds,
   onToggleSave,
 }) {
+  const [activeListingSelection, setActiveListingSelection] = useState({
+    filterKey: "",
+    listingId: "",
+    resultKey: "",
+  });
+  const cardRefs = useRef(new Map());
   const searchChips = getSearchChips(search);
   const filteredListings = listings.filter((listing) => {
     const rent = getRentNumber(listing);
@@ -290,6 +340,54 @@ function BrowseResults({
     filteredListings,
     search?.campus,
   );
+  const resultKey = [
+    search?.campus,
+    search?.minRent,
+    search?.maxRent,
+    search?.housingType,
+    search?.safetyLevel,
+    search?.maxCommute,
+    listings.map((listing) => getListingId(listing)).join(","),
+  ]
+    .filter(hasValue)
+    .join("|");
+  const filterKey = [
+    filters.minRent,
+    filters.maxRent,
+    filters.housingType,
+    filters.safetyLevel,
+    filters.maxCommute,
+  ]
+    .filter(hasValue)
+    .join("|");
+  const activeListingId =
+    activeListingSelection.resultKey === resultKey &&
+    activeListingSelection.filterKey === filterKey &&
+    filteredListings.some(
+      (listing) => getListingId(listing) === activeListingSelection.listingId,
+    )
+      ? activeListingSelection.listingId
+      : "";
+  const handleSelectListing = (listingId, { scrollToCard = false } = {}) => {
+    if (!listingId) {
+      return;
+    }
+
+    setActiveListingSelection({
+      filterKey,
+      listingId,
+      resultKey,
+    });
+
+    if (scrollToCard) {
+      window.requestAnimationFrame(() => {
+        cardRefs.current.get(listingId)?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+        });
+      });
+    }
+  };
 
   return (
     <section className="browse-page" aria-labelledby="results-title">
@@ -372,19 +470,50 @@ function BrowseResults({
       )}
 
       {!isLoading && !errorMessage && filteredListings.length > 0 && (
-        <div className="listing-grid">
-          {filteredListings.map((listing) => (
-            <ListingCard
-              key={getListingId(listing)}
-              listing={listing}
-              campus={search?.campus}
-              badges={badgesByListingId[getListingId(listing)] || []}
-              onDetails={onDetails}
-              isSaved={savedListingIds?.has(getListingId(listing))}
-              isSaving={savingListingIds?.has(getListingId(listing))}
-              onToggleSave={onToggleSave}
-            />
-          ))}
+        <div className="results-map-layout">
+          <div className="results-list-column">
+            <div className="listing-grid">
+              {filteredListings.map((listing) => {
+                const listingId = getListingId(listing);
+
+                return (
+                  <ListingCard
+                    key={listingId}
+                    cardRef={(element) => {
+                      if (!listingId) {
+                        return;
+                      }
+
+                      if (element) {
+                        cardRefs.current.set(listingId, element);
+                      } else {
+                        cardRefs.current.delete(listingId);
+                      }
+                    }}
+                    listing={listing}
+                    campus={search?.campus}
+                    badges={badgesByListingId[listingId] || []}
+                    onDetails={onDetails}
+                    isActive={listingId === activeListingId}
+                    onSelect={handleSelectListing}
+                    isSaved={savedListingIds?.has(listingId)}
+                    isSaving={savingListingIds?.has(listingId)}
+                    onToggleSave={onToggleSave}
+                  />
+                );
+              })}
+            </div>
+          </div>
+
+          <ListingsMap
+            activeListingId={activeListingId}
+            listings={filteredListings}
+            onOpenDetails={onDetails}
+            onSelectListing={(listingId) =>
+              handleSelectListing(listingId, { scrollToCard: true })
+            }
+            selectedCampus={selectedCampus}
+          />
         </div>
       )}
     </section>
