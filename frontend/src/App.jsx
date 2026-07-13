@@ -814,7 +814,7 @@ function App() {
 
   const addListingToCompare = (listingId) => {
     if (!listingId) {
-      return;
+      return false;
     }
 
     const currentIds = compareListingIdsRef.current;
@@ -824,7 +824,7 @@ function App() {
         type: "error",
         message: "This listing is already in your comparison.",
       });
-      return;
+      return false;
     }
 
     if (currentIds.length >= MAX_COMPARE_LISTINGS) {
@@ -833,7 +833,7 @@ function App() {
         message:
           "You can compare up to 3 listings at a time. Remove one before adding another.",
       });
-      return;
+      return false;
     }
 
     const nextIds = [...currentIds, listingId];
@@ -843,6 +843,7 @@ function App() {
       type: "success",
       message: "Listing added to your comparison.",
     });
+    return true;
   };
 
   const removeListingFromCompare = (listingId) => {
@@ -862,16 +863,22 @@ function App() {
   };
 
   const openCompareView = () => {
-    if (compareListingIds.length === 0) {
-      setCompareStatus({
-        type: "error",
-        message: "Add at least one listing before opening the compare view.",
-      });
+    setListingDetailOrigin("results");
+    setCurrentView("compare");
+  };
+
+  const openCompareWithListing = (listingId) => {
+    if (!listingId) {
       return;
     }
 
-    setListingDetailOrigin("results");
-    setCurrentView("compare");
+    if (!compareListingIdsRef.current.includes(listingId)) {
+      addListingToCompare(listingId);
+    } else {
+      setCompareStatus({ type: "", message: "" });
+    }
+
+    openCompareView();
   };
 
   const openListingDetail = async (listingId) => {
@@ -880,7 +887,11 @@ function App() {
     }
 
     setListingDetailOrigin(
-      currentView === "saved" ? "saved" : "results",
+      currentView === "saved"
+        ? "saved"
+        : currentView === "compare"
+          ? "compare"
+          : "results",
     );
     setSelectedListingId(listingId);
     setSelectedListing(null);
@@ -914,6 +925,11 @@ function App() {
     setCurrentView(listingDetailOrigin);
     setListingError("");
     setIsLoadingListing(false);
+  };
+
+  const returnFromCompare = () => {
+    setListingDetailOrigin("results");
+    setCurrentView(activeSearch ? "results" : "search");
   };
 
   const openSavedListings = () => {
@@ -1100,8 +1116,7 @@ function App() {
           compareListingIds={compareListingIds}
           compareStatus={compareStatus}
           maxCompareListings={MAX_COMPARE_LISTINGS}
-          onAddCompare={addListingToCompare}
-          onRemoveCompare={removeListingFromCompare}
+          onCompareListing={openCompareWithListing}
           onOpenCompare={openCompareView}
           onClearCompareStatus={clearCompareStatus}
           onFilterChange={handleFilterChange}
@@ -1117,9 +1132,14 @@ function App() {
       {currentView === "compare" && (
         <CompareListings
           listings={comparedListings}
+          availableListings={listings}
           campus={activeSearch?.campus}
+          compareStatus={compareStatus}
+          maxCompareListings={MAX_COMPARE_LISTINGS}
+          onAddCompare={addListingToCompare}
           onRemoveCompare={removeListingFromCompare}
-          onBackToResults={returnToResults}
+          onBackToResults={returnFromCompare}
+          onDetails={openListingDetail}
         />
       )}
 
@@ -1144,6 +1164,9 @@ function App() {
           isLoading={isLoadingListing}
           errorMessage={listingError}
           onBack={returnToResults}
+          backLabel={
+            listingDetailOrigin === "compare" ? "Back to Compare" : "Back to Results"
+          }
           onRetry={retryListingDetail}
           isSaved={savedListingIds.has(selectedListingId)}
           isSaving={savingListingIds.has(selectedListingId)}
