@@ -11,6 +11,7 @@ import {
   getPropertyType,
   getSafetyLevel,
   getValueScore,
+  getWeightedValueScore,
   getValueScoreBreakdown,
 } from "../utils/listingFormatters";
 
@@ -34,10 +35,13 @@ function ListingDetail({
   isSaved = false,
   isSaving = false,
   onToggleSave,
+  valueScoreWeights,
 }) {
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
-  const valueScore = getValueScore(listing, campus);
+  const valueScore = valueScoreWeights
+    ? getWeightedValueScore(listing, campus, valueScoreWeights)
+    : getValueScore(listing, campus);
   const scoreBreakdown = getValueScoreBreakdown(listing, campus);
   const listingId = getListingId(listing);
   const safetyClass =

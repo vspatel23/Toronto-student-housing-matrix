@@ -12,6 +12,13 @@ export const housingTypes = [
 
 export const safetyLevels = ["Any", "Medium+", "High Only"];
 
+export const DEFAULT_VALUE_SCORE_WEIGHTS = {
+  affordability: 35,
+  commute: 25,
+  safety: 25,
+  amenities: 15,
+};
+
 export const defaultFormData = {
   campus: "",
   housingType: "All types",

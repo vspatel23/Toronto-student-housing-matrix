@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
-import { AUTH_TOKEN_KEY, AUTH_USER_KEY, defaultFormData } from "./utils/constants";
+import {
+  AUTH_TOKEN_KEY,
+  AUTH_USER_KEY,
+  DEFAULT_VALUE_SCORE_WEIGHTS,
+  defaultFormData,
+} from "./utils/constants";
 import { getCampusLabel } from "./utils/campusFormatters";
 import {
   getStoredAuthUser,
@@ -80,6 +85,9 @@ function App() {
     type: "",
     message: "",
   });
+  const [valueScoreWeights, setValueScoreWeights] = useState({
+    ...DEFAULT_VALUE_SCORE_WEIGHTS,
+  });
 
   const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
     setSavedPreference(null);
@@ -105,6 +113,7 @@ function App() {
     compareListingIdsRef.current = [];
     setCompareListingIds([]);
     setCompareStatus({ type: "", message: "" });
+    setValueScoreWeights({ ...DEFAULT_VALUE_SCORE_WEIGHTS });
     if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
       setFormData(defaultFormData);
     }
@@ -808,6 +817,26 @@ function App() {
     }));
   };
 
+  const updateValueScoreWeight = (factor, value) => {
+    if (!(factor in DEFAULT_VALUE_SCORE_WEIGHTS)) {
+      return;
+    }
+
+    const numericValue = Number(value);
+    const safeValue = Number.isFinite(numericValue)
+      ? Math.max(0, Math.min(100, numericValue))
+      : DEFAULT_VALUE_SCORE_WEIGHTS[factor];
+
+    setValueScoreWeights((currentWeights) => ({
+      ...currentWeights,
+      [factor]: safeValue,
+    }));
+  };
+
+  const resetValueScoreWeights = () => {
+    setValueScoreWeights({ ...DEFAULT_VALUE_SCORE_WEIGHTS });
+  };
+
   const clearCompareStatus = () => {
     setCompareStatus({ type: "", message: "" });
   };
@@ -1126,6 +1155,9 @@ function App() {
           savedListingIds={savedListingIds}
           savingListingIds={savingListingIds}
           onToggleSave={toggleSavedListing}
+          valueScoreWeights={valueScoreWeights}
+          onWeightChange={updateValueScoreWeight}
+          onResetWeights={resetValueScoreWeights}
         />
       )}
 
@@ -1136,6 +1168,7 @@ function App() {
           campus={activeSearch?.campus}
           compareStatus={compareStatus}
           maxCompareListings={MAX_COMPARE_LISTINGS}
+          valueScoreWeights={valueScoreWeights}
           onAddCompare={addListingToCompare}
           onRemoveCompare={removeListingFromCompare}
           onBackToResults={returnFromCompare}
@@ -1171,6 +1204,7 @@ function App() {
           isSaved={savedListingIds.has(selectedListingId)}
           isSaving={savingListingIds.has(selectedListingId)}
           onToggleSave={toggleSavedListing}
+          valueScoreWeights={valueScoreWeights}
         />
       )}
     </main>

@@ -11,6 +11,7 @@ import {
   getPropertyType,
   getSafetyLevel,
   getValueScore,
+  getWeightedValueScore,
   getValueScoreBreakdown,
 } from "../utils/listingFormatters";
 
@@ -36,13 +37,19 @@ const getSafetyClass = (safetyLevel) =>
     ? "unknown"
     : safetyLevel.toLowerCase().replace(/\s+/g, "-");
 
-const getBestListing = (listings, campus) =>
+const getListingScore = (listing, campus, weights) =>
+  weights
+    ? getWeightedValueScore(listing, campus, weights)
+    : getValueScore(listing, campus);
+
+const getBestListing = (listings, campus, weights) =>
   listings.reduce((bestListing, listing) => {
     if (!bestListing) {
       return listing;
     }
 
-    return getValueScore(listing, campus) > getValueScore(bestListing, campus)
+    return getListingScore(listing, campus, weights) >
+      getListingScore(bestListing, campus, weights)
       ? listing
       : bestListing;
   }, null);
@@ -121,6 +128,7 @@ function EmptyCompareSlot({ onOpenPicker }) {
 function ComparePicker({
   availableListings,
   campus,
+  valueScoreWeights,
   onAddCompare,
   onClose,
 }) {
@@ -173,7 +181,9 @@ function ComparePicker({
                   </span>
                   <span>{formatRent(listing.monthlyRent ?? listing.rent)}</span>
                   <span>{formatCommute(listing, campus)}</span>
-                  <strong>{getValueScore(listing, campus)}/100</strong>
+                  <strong>
+                    {getListingScore(listing, campus, valueScoreWeights)}/100
+                  </strong>
                 </button>
               );
             })}
@@ -190,6 +200,7 @@ function CompareListings({
   campus,
   compareStatus = { type: "", message: "" },
   maxCompareListings = 3,
+  valueScoreWeights,
   onAddCompare,
   onRemoveCompare,
   onBackToResults,
@@ -207,7 +218,10 @@ function CompareListings({
     { length: maxCompareListings },
     (_, index) => listings[index] || null,
   );
-  const strongestListing = listings.length >= 2 ? getBestListing(listings, campus) : null;
+  const strongestListing =
+    listings.length >= 2
+      ? getBestListing(listings, campus, valueScoreWeights)
+      : null;
   const strongestListingId = getListingId(strongestListing);
   const lowestRent = listings.length >= 2 ? getLowestRent(listings) : null;
   const shortestCommute =
@@ -297,7 +311,9 @@ function CompareListings({
                 <h3>{getListingTitle(listing)}</h3>
                 <span className="compare-type-pill">{getPropertyType(listing)}</span>
                 <div className={`compare-score-tile${isStrongest ? " best" : ""}`}>
-                  <strong>{getValueScore(listing, campus)}</strong>
+                  <strong>
+                    {getListingScore(listing, campus, valueScoreWeights)}
+                  </strong>
                   <span>/100</span>
                 </div>
               </div>
@@ -491,7 +507,14 @@ function CompareListings({
             <p>
               Based on the Value Score calculation, <strong>{recommendationTitle}</strong>{" "}
               offers the strongest overall value at{" "}
-              <strong>{getValueScore(recommendationListing, campus)}/100</strong>.
+              <strong>
+                {getListingScore(
+                  recommendationListing,
+                  campus,
+                  valueScoreWeights,
+                )}
+                /100
+              </strong>.
               {lowestRent !== null && listings.length >= 2
                 ? ` For the most affordable option, compare listings around ${formatRent(
                     lowestRent,
@@ -506,6 +529,7 @@ function CompareListings({
         <ComparePicker
           availableListings={listingsToAdd}
           campus={campus}
+          valueScoreWeights={valueScoreWeights}
           onAddCompare={onAddCompare}
           onClose={() => setIsPickerOpen(false)}
         />
