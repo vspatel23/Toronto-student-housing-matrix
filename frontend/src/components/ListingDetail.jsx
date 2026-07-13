@@ -29,6 +29,7 @@ function ListingDetail({
   isLoading,
   errorMessage,
   onBack,
+  backLabel = "Back to Results",
   onRetry,
   isSaved = false,
   isSaving = false,
@@ -47,7 +48,7 @@ function ListingDetail({
   return (
     <section className="detail-page" aria-labelledby="detail-title">
       <button type="button" className="back-button" onClick={onBack}>
-        Back to Results
+        {backLabel}
       </button>
 
       {isLoading && (

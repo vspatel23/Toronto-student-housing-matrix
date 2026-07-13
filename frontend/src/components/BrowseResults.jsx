@@ -153,8 +153,7 @@ export function ListingCard({
   isSaving = false,
   onToggleSave,
   isCompared = false,
-  onAddCompare,
-  onRemoveCompare,
+  onCompareListing,
 }) {
   const listingId = getListingId(listing);
   const amenities = getAmenities(listing);
@@ -246,7 +245,7 @@ export function ListingCard({
       )}
 
       <div className="listing-card-actions">
-        {onAddCompare && onRemoveCompare && (
+        {onCompareListing && (
           <button
             type="button"
             className={`secondary-button compare-toggle-button${
@@ -256,14 +255,10 @@ export function ListingCard({
             aria-pressed={isCompared}
             onClick={(event) => {
               event.stopPropagation();
-              if (isCompared) {
-                onRemoveCompare(listingId);
-              } else {
-                onAddCompare(listingId);
-              }
+              onCompareListing(listingId);
             }}
           >
-            {isCompared ? "Remove Compare" : "Add to Compare"}
+            Compare
           </button>
         )}
         <button
@@ -316,8 +311,7 @@ function BrowseResults({
   compareListingIds = [],
   compareStatus = { type: "", message: "" },
   maxCompareListings = 3,
-  onAddCompare,
-  onRemoveCompare,
+  onCompareListing,
   onOpenCompare,
   onClearCompareStatus,
 }) {
@@ -475,10 +469,9 @@ function BrowseResults({
           <button
             type="button"
             className="secondary-button"
-            disabled={compareCount === 0}
             onClick={handleOpenCompare}
           >
-            Compare Selected
+            Open Compare
           </button>
         </div>
       </div>
@@ -561,8 +554,7 @@ function BrowseResults({
                     isSaving={savingListingIds?.has(listingId)}
                     onToggleSave={onToggleSave}
                     isCompared={compareListingIds.includes(listingId)}
-                    onAddCompare={onAddCompare}
-                    onRemoveCompare={onRemoveCompare}
+                    onCompareListing={onCompareListing}
                   />
                 );
               })}
