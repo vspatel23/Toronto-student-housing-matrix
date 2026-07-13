@@ -5,6 +5,7 @@ import {
   formatRent,
   getAmenities,
   getDescription,
+  getListingId,
   getListingTitle,
   getLocationLabel,
   getPropertyType,
@@ -29,11 +30,15 @@ function ListingDetail({
   errorMessage,
   onBack,
   onRetry,
+  isSaved = false,
+  isSaving = false,
+  onToggleSave,
 }) {
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
   const valueScore = getValueScore(listing, campus);
   const scoreBreakdown = getValueScoreBreakdown(listing, campus);
+  const listingId = getListingId(listing);
   const safetyClass =
     safetyLevel === DATA_UNAVAILABLE
       ? "unknown"
@@ -84,10 +89,28 @@ function ListingDetail({
                 {formatRent(listing.monthlyRent ?? listing.rent)}
               </p>
             </div>
-            <div className="value-score-card" aria-label="Value score">
-              <span>Value Score</span>
-              <strong>{valueScore}</strong>
-              <small>out of 100</small>
+            <div className="detail-hero-actions">
+              <div className="value-score-card" aria-label="Value score">
+                <span>Value Score</span>
+                <strong>{valueScore}</strong>
+                <small>out of 100</small>
+              </div>
+              {onToggleSave && (
+                <button
+                  type="button"
+                  className={`save-toggle-button${isSaved ? " saved" : ""}`}
+                  disabled={!listingId || isSaving}
+                  aria-pressed={isSaved}
+                  aria-label={
+                    isSaved
+                      ? "Remove listing from saved listings"
+                      : "Save listing"
+                  }
+                  onClick={() => onToggleSave(listingId)}
+                >
+                  {isSaved ? "★ Saved" : "☆ Save Listing"}
+                </button>
+              )}
             </div>
           </div>
 

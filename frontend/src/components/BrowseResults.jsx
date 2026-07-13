@@ -137,7 +137,14 @@ function ResultsFilters({ filters, onChange }) {
   );
 }
 
-function ListingCard({ listing, campus, onDetails }) {
+export function ListingCard({
+  listing,
+  campus,
+  onDetails,
+  isSaved = false,
+  isSaving = false,
+  onToggleSave,
+}) {
   const listingId = getListingId(listing);
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
@@ -193,14 +200,30 @@ function ListingCard({ listing, campus, onDetails }) {
         <p className="listing-description">{listing.description}</p>
       )}
 
-      <button
-        type="button"
-        className="details-button"
-        disabled={!listingId}
-        onClick={() => onDetails(listingId)}
-      >
-        Details
-      </button>
+      <div className="listing-card-actions">
+        <button
+          type="button"
+          className="details-button"
+          disabled={!listingId}
+          onClick={() => onDetails(listingId)}
+        >
+          Details
+        </button>
+        {onToggleSave && (
+          <button
+            type="button"
+            className={`save-toggle-button${isSaved ? " saved" : ""}`}
+            disabled={!listingId || isSaving}
+            aria-pressed={isSaved}
+            aria-label={
+              isSaved ? "Remove listing from saved listings" : "Save listing"
+            }
+            onClick={() => onToggleSave(listingId)}
+          >
+            {isSaved ? "★ Saved" : "☆ Save"}
+          </button>
+        )}
+      </div>
     </article>
   );
 }
@@ -215,6 +238,9 @@ function BrowseResults({
   onDetails,
   onEditSearch,
   onRetry,
+  savedListingIds,
+  savingListingIds,
+  onToggleSave,
 }) {
   const searchChips = getSearchChips(search);
   const filteredListings = listings.filter((listing) => {
@@ -344,6 +370,9 @@ function BrowseResults({
               listing={listing}
               campus={search?.campus}
               onDetails={onDetails}
+              isSaved={savedListingIds?.has(getListingId(listing))}
+              isSaving={savingListingIds?.has(getListingId(listing))}
+              onToggleSave={onToggleSave}
             />
           ))}
         </div>
