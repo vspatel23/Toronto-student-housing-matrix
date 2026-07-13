@@ -60,6 +60,8 @@ function App() {
   const [listingError, setListingError] = useState("");
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [isLoadingSaved, setIsLoadingSaved] = useState(false);
+  const [recentSearches, setRecentSearches] = useState([]);
+  const [isLoadingRecentSearches, setIsLoadingRecentSearches] = useState(false);
 
   const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
     setSavedPreference(null);
@@ -76,6 +78,7 @@ function App() {
     setSelectedListing(null);
     setSelectedListingId("");
     setListingError("");
+    setRecentSearches([]);
     if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
       setFormData(defaultFormData);
     }
@@ -170,6 +173,70 @@ function App() {
     };
 
     loadCampuses();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [authUser]);
+
+  const loadRecentSearches = async () => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    setIsLoadingRecentSearches(true);
+
+    try {
+      const data = await apiRequest("/api/analytics/recent", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      setRecentSearches(data.searches || []);
+    } catch {
+      // Recent searches are a convenience panel; a load failure should not
+      // block or degrade the rest of the search experience.
+    } finally {
+      setIsLoadingRecentSearches(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    let isMounted = true;
+
+    const loadInitialRecentSearches = async () => {
+      const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+      if (!authToken) {
+        return;
+      }
+
+      setIsLoadingRecentSearches(true);
+
+      try {
+        const data = await apiRequest("/api/analytics/recent", {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        });
+        if (isMounted) {
+          setRecentSearches(data.searches || []);
+        }
+      } catch {
+        // Recent searches are a convenience panel; a load failure should
+        // not block or degrade the rest of the search experience.
+      } finally {
+        if (isMounted) {
+          setIsLoadingRecentSearches(false);
+        }
+      }
+    };
+
+    loadInitialRecentSearches();
 
     return () => {
       isMounted = false;
@@ -453,6 +520,25 @@ function App() {
         listingData = { count: 0 };
       }
 
+      apiRequest("/api/analytics/search", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          campus: searchSnapshot.campus,
+          minRent: searchSnapshot.minRent,
+          maxRent: searchSnapshot.maxRent,
+          housingType: searchSnapshot.housingType,
+          maxCommute: searchSnapshot.maxCommute,
+        }),
+      })
+        .then(() => loadRecentSearches())
+        .catch(() => {
+          // Analytics is best-effort and must never block or degrade search.
+        });
+
       setStatus({
         type: listingLoadFailed ? "error" : "success",
         message:
@@ -699,6 +785,8 @@ function App() {
             onSubmit={handleSubmit}
             onLoadSaved={loadSavedPreferences}
             onRetryCampuses={retryCampuses}
+            recentSearches={recentSearches}
+            isLoadingRecentSearches={isLoadingRecentSearches}
           />
 
           <HelpCards />

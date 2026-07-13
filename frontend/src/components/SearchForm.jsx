@@ -35,6 +35,8 @@ function SearchForm({
   onSubmit,
   onLoadSaved,
   onRetryCampuses,
+  recentSearches = [],
+  isLoadingRecentSearches = false,
 }) {
   const isSubmittingSearch = isSavingPreference || isSearchingListings;
 
@@ -272,6 +274,32 @@ function SearchForm({
                   {preference.safetyLevel}
                 </p>
                 {preference.notes && <small>{preference.notes}</small>}
+              </article>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {isLoadingRecentSearches && (
+        <p className="helper info" role="status">
+          Loading recent searches…
+        </p>
+      )}
+
+      {!isLoadingRecentSearches && recentSearches.length > 0 && (
+        <section className="saved-list" aria-label="Recent searches">
+          <h3>Recent Searches</h3>
+          <div className="saved-grid">
+            {recentSearches.map((search) => (
+              <article key={search._id} className="saved-item">
+                <strong>{search.campus || "No campus selected"}</strong>
+                <span>{formatDate(search.updatedAt || search.createdAt)}</span>
+                <p>
+                  {search.housingType || "All types"}
+                  {(search.minRent || search.maxRent) &&
+                    ` · $${search.minRent ?? "0"}-$${search.maxRent ?? "∞"}`}
+                  {search.maxCommute && ` · ${search.maxCommute} min`}
+                </p>
               </article>
             ))}
           </div>
