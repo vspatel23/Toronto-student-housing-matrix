@@ -1,21 +1,7 @@
 import { housingTypes, safetyLevels } from "../utils/constants";
 import { formatDate } from "../utils/api";
+import { getCampusLabel } from "../utils/campusFormatters";
 import StatusMessage from "./StatusMessage";
-
-const getCampusLabel = (campus) => {
-  const institution = campus?.institution?.trim();
-  const campusName = campus?.campusName?.trim();
-
-  if (institution && campusName && institution === campusName) {
-    return institution;
-  }
-
-  if (institution && campusName) {
-    return `${institution} -- ${campusName}`;
-  }
-
-  return institution || campusName || "Unnamed campus";
-};
 
 function SearchForm({
   campuses,
