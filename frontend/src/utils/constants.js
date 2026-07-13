@@ -10,6 +10,17 @@ export const housingTypes = [
   "Room Rental",
 ];
 
+export const furnishedFilterOptions = ["Any", "Furnished", "Unfurnished"];
+
+export const advancedAmenityFilters = [
+  "Laundry",
+  "Parking",
+  "Pet Friendly",
+  "Kitchen",
+  "Air Conditioning",
+  "Nearby Transit",
+];
+
 export const safetyLevels = ["Any", "Medium+", "High Only"];
 
 export const DEFAULT_VALUE_SCORE_WEIGHTS = {

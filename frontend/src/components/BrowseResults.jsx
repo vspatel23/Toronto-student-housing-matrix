@@ -1,5 +1,10 @@
 import { useRef, useState } from "react";
-import { DEFAULT_VALUE_SCORE_WEIGHTS, housingTypes } from "../utils/constants";
+import {
+  DEFAULT_VALUE_SCORE_WEIGHTS,
+  advancedAmenityFilters,
+  furnishedFilterOptions,
+  housingTypes,
+} from "../utils/constants";
 import { getRecommendationBadgesByListingId } from "../utils/recommendationBadges";
 import ListingBadges from "./ListingBadges";
 import ListingsMap from "./ListingsMap";
@@ -54,6 +59,9 @@ const matchesNumberFilter = (value, min, max) => {
 
   return true;
 };
+
+const getSelectedAmenities = (filters) =>
+  Array.isArray(filters?.amenities) ? filters.amenities : [];
 
 const getSearchChips = (search) =>
   [
@@ -200,6 +208,8 @@ function ResultsFilters({
   onWeightChange,
   onResetWeights,
 }) {
+  const selectedAmenities = getSelectedAmenities(filters);
+
   return (
     <section className="results-filter-panel" aria-labelledby="filters-title">
       <div>
@@ -271,6 +281,56 @@ function ResultsFilters({
             placeholder="Any"
           />
         </label>
+
+        <label>
+          <span>Furnished</span>
+          <select
+            value={filters.furnished || "Any"}
+            onChange={(event) => onChange("furnished", event.target.value)}
+          >
+            {furnishedFilterOptions.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      <div className="advanced-filter-section">
+        <fieldset className="amenity-filter-group">
+          <legend className="filter-group-label">Amenities</legend>
+          {selectedAmenities.length > 0 && (
+            <p className="selected-filter-count">
+              {selectedAmenities.length} amenity filter
+              {selectedAmenities.length === 1 ? "" : "s"} selected
+            </p>
+          )}
+          <div className="amenity-filter-options">
+            {advancedAmenityFilters.map((amenity) => {
+              const isSelected = selectedAmenities.includes(amenity);
+              const nextAmenities = isSelected
+                ? selectedAmenities.filter((item) => item !== amenity)
+                : [...selectedAmenities, amenity];
+
+              return (
+                <label
+                  key={amenity}
+                  className={`amenity-filter-chip${
+                    isSelected ? " selected" : ""
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={isSelected}
+                    onChange={() => onChange("amenities", nextAmenities)}
+                  />
+                  <span>{amenity}</span>
+                </label>
+              );
+            })}
+          </div>
+        </fieldset>
       </div>
 
       <ValueScoreWeightControls
@@ -467,6 +527,7 @@ function BrowseResults({
   });
   const cardRefs = useRef(new Map());
   const searchChips = getSearchChips(search);
+  const selectedAmenities = getSelectedAmenities(filters);
   const filteredListings = listings.filter((listing) => {
     const rent = getRentNumber(listing);
     const commuteMinutes = getCommuteMinutes(listing, search?.campus);
@@ -503,6 +564,25 @@ function BrowseResults({
       return false;
     }
 
+    if (filters.furnished === "Furnished" && listing?.furnished !== true) {
+      return false;
+    }
+
+    if (filters.furnished === "Unfurnished" && listing?.furnished !== false) {
+      return false;
+    }
+
+    if (selectedAmenities.length > 0) {
+      const listingAmenities = getAmenities(listing);
+      const hasAllSelectedAmenities = selectedAmenities.every((amenity) =>
+        listingAmenities.includes(amenity),
+      );
+
+      if (!hasAllSelectedAmenities) {
+        return false;
+      }
+    }
+
     return true;
   });
   const rankedListings = [...filteredListings].sort((firstListing, secondListing) =>
@@ -535,6 +615,8 @@ function BrowseResults({
     filters.housingType,
     filters.safetyLevel,
     filters.maxCommute,
+    filters.furnished,
+    ...selectedAmenities,
   ]
     .filter(hasValue)
     .join("|");
@@ -616,8 +698,8 @@ function BrowseResults({
           <h2 id="results-title">Housing Results</h2>
           <p>
             {rankedListings.length} listing
-            {rankedListings.length === 1 ? "" : "s"} found based on your
-            preferences
+            {rankedListings.length === 1 ? "" : "s"} found with your current
+            filters
           </p>
         </div>
         <div className="compare-toolbar" aria-label="Compare selected listings">
@@ -675,8 +757,8 @@ function BrowseResults({
         <div className="state-panel empty-state">
           <h3>No listings match these filters</h3>
           <p>
-            Try widening the rent range, commute time, or housing type to see
-            more options.
+            Try removing an amenity or widening the rent, commute, or housing
+            type filters to see more options.
           </p>
           <button type="button" className="secondary-button" onClick={onEditSearch}>
             Edit Search
