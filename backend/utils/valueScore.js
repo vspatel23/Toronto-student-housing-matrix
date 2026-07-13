@@ -21,6 +21,21 @@ const normalizeCampusName = (value) =>
         .toLowerCase()
     : "";
 
+const isMatchingCampusName = (estimateCampus, selectedCampus) => {
+  const normalizedEstimateCampus = normalizeCampusName(estimateCampus);
+  const normalizedSelectedCampus = normalizeCampusName(selectedCampus);
+
+  if (!normalizedEstimateCampus || !normalizedSelectedCampus) {
+    return false;
+  }
+
+  return (
+    normalizedEstimateCampus === normalizedSelectedCampus ||
+    normalizedSelectedCampus.startsWith(`${normalizedEstimateCampus} -`) ||
+    normalizedEstimateCampus.startsWith(`${normalizedSelectedCampus} -`)
+  );
+};
+
 const getRentNumber = (listing) => {
   const rent = Number(listing?.monthlyRent ?? listing?.rent);
   return Number.isFinite(rent) && rent >= 0 ? rent : null;
@@ -32,15 +47,17 @@ const getCommuteMinutes = (listing, campus) => {
   }
 
   const normalizedCampus = normalizeCampusName(campus);
-  let commuteEstimate = null;
+  let commuteEstimate;
 
   if (normalizedCampus) {
     commuteEstimate = listing.commuteEstimates.find(
-      (estimate) => normalizeCampusName(estimate?.campus) === normalizedCampus,
+      (estimate) => isMatchingCampusName(estimate?.campus, campus),
     );
-  }
 
-  if (!commuteEstimate) {
+    if (!commuteEstimate) {
+      return null;
+    }
+  } else {
     commuteEstimate = listing.commuteEstimates[0];
   }
 
