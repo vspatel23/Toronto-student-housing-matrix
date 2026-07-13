@@ -6,6 +6,7 @@ import {
   getListingTitle,
   getSafetyLevel,
   getValueScore,
+  getWeightedValueScore,
 } from "./listingFormatters";
 
 const MAX_BADGES_PER_LISTING = 3;
@@ -32,6 +33,11 @@ const getSortableTitle = (listing) => {
 
 const getTieBreakerValue = (value) =>
   value === null ? Number.POSITIVE_INFINITY : value;
+
+const getListingScore = (listing, campus, weights) =>
+  weights
+    ? getWeightedValueScore(listing, campus, weights)
+    : getValueScore(listing, campus);
 
 const compareLowerTieBreaker = (listingValue, bestListingValue) => {
   const currentValue = getTieBreakerValue(listingValue);
@@ -90,9 +96,10 @@ const getSafetyScore = (listing) => {
   return null;
 };
 
-const compareBestValue = (listing, bestListing, campus) => {
+const compareBestValue = (listing, bestListing, campus, weights) => {
   const scoreDifference =
-    getValueScore(listing, campus) - getValueScore(bestListing, campus);
+    getListingScore(listing, campus, weights) -
+    getListingScore(bestListing, campus, weights);
 
   if (scoreDifference !== 0) {
     return scoreDifference;
@@ -132,7 +139,7 @@ const chooseBestListing = (listings, isBetter) =>
     return isBetter(listing, bestListing) ? listing : bestListing;
   }, null);
 
-const chooseLowestRentListing = (listings, campus) =>
+const chooseLowestRentListing = (listings, campus, weights) =>
   chooseBestListing(listings, (listing, bestListing) => {
     const rent = getRentNumber(listing);
     const bestRent = getRentNumber(bestListing);
@@ -146,7 +153,8 @@ const chooseLowestRentListing = (listings, campus) =>
     }
 
     const scoreDifference =
-      getValueScore(listing, campus) - getValueScore(bestListing, campus);
+      getListingScore(listing, campus, weights) -
+      getListingScore(bestListing, campus, weights);
 
     if (scoreDifference !== 0) {
       return scoreDifference > 0;
@@ -155,7 +163,7 @@ const chooseLowestRentListing = (listings, campus) =>
     return getSortableTitle(listing).localeCompare(getSortableTitle(bestListing)) < 0;
   });
 
-const chooseShortestCommuteListing = (listings, campus) =>
+const chooseShortestCommuteListing = (listings, campus, weights) =>
   chooseBestListing(listings, (listing, bestListing) => {
     const commuteMinutes = getCommuteMinutes(listing, campus);
     const bestCommuteMinutes = getCommuteMinutes(bestListing, campus);
@@ -169,7 +177,8 @@ const chooseShortestCommuteListing = (listings, campus) =>
     }
 
     const scoreDifference =
-      getValueScore(listing, campus) - getValueScore(bestListing, campus);
+      getListingScore(listing, campus, weights) -
+      getListingScore(bestListing, campus, weights);
 
     if (scoreDifference !== 0) {
       return scoreDifference > 0;
@@ -178,7 +187,7 @@ const chooseShortestCommuteListing = (listings, campus) =>
     return getSortableTitle(listing).localeCompare(getSortableTitle(bestListing)) < 0;
   });
 
-const chooseSafestListing = (listings, campus) =>
+const chooseSafestListing = (listings, campus, weights) =>
   chooseBestListing(listings, (listing, bestListing) => {
     const safetyScore = getSafetyScore(listing);
     const bestSafetyScore = getSafetyScore(bestListing);
@@ -192,7 +201,8 @@ const chooseSafestListing = (listings, campus) =>
     }
 
     const scoreDifference =
-      getValueScore(listing, campus) - getValueScore(bestListing, campus);
+      getListingScore(listing, campus, weights) -
+      getListingScore(bestListing, campus, weights);
 
     if (scoreDifference !== 0) {
       return scoreDifference > 0;
@@ -201,7 +211,7 @@ const chooseSafestListing = (listings, campus) =>
     return getSortableTitle(listing).localeCompare(getSortableTitle(bestListing)) < 0;
   });
 
-const chooseMostAmenitiesListing = (listings, campus) =>
+const chooseMostAmenitiesListing = (listings, campus, weights) =>
   chooseBestListing(listings, (listing, bestListing) => {
     const amenitiesCount = getAmenities(listing).length;
     const bestAmenitiesCount = getAmenities(bestListing).length;
@@ -215,7 +225,8 @@ const chooseMostAmenitiesListing = (listings, campus) =>
     }
 
     const scoreDifference =
-      getValueScore(listing, campus) - getValueScore(bestListing, campus);
+      getListingScore(listing, campus, weights) -
+      getListingScore(bestListing, campus, weights);
 
     if (scoreDifference !== 0) {
       return scoreDifference > 0;
@@ -244,7 +255,7 @@ const sortAndLimitBadges = (badges) =>
     )
     .slice(0, MAX_BADGES_PER_LISTING);
 
-export const getRecommendationBadgesByListingId = (listings, campus) => {
+export const getRecommendationBadgesByListingId = (listings, campus, weights) => {
   if (!Array.isArray(listings) || listings.length === 0) {
     return {};
   }
@@ -265,20 +276,28 @@ export const getRecommendationBadgesByListingId = (listings, campus) => {
 
   const bestValueListing = chooseBestListing(
     listings,
-    (listing, bestListing) => compareBestValue(listing, bestListing, campus) > 0,
+    (listing, bestListing) =>
+      compareBestValue(listing, bestListing, campus, weights) > 0,
   );
   const lowestRentListing = chooseLowestRentListing(
     listingsWithValidRent,
     campus,
+    weights,
   );
   const shortestCommuteListing = chooseShortestCommuteListing(
     listingsWithValidCommute,
     campus,
+    weights,
   );
-  const safestListing = chooseSafestListing(listingsWithSafetyData, campus);
+  const safestListing = chooseSafestListing(
+    listingsWithSafetyData,
+    campus,
+    weights,
+  );
   const mostAmenitiesListing = chooseMostAmenitiesListing(
     listingsWithAmenities,
     campus,
+    weights,
   );
 
   addBadge(badgesByListingId, bestValueListing, "value");

@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { housingTypes } from "../utils/constants";
+import { DEFAULT_VALUE_SCORE_WEIGHTS, housingTypes } from "../utils/constants";
 import { getRecommendationBadgesByListingId } from "../utils/recommendationBadges";
 import ListingBadges from "./ListingBadges";
 import ListingsMap from "./ListingsMap";
@@ -16,10 +16,17 @@ import {
   getLocationLabel,
   getPropertyType,
   getSafetyLevel,
-  getValueScore,
+  getWeightedValueScore,
+  normalizeValueScoreWeights,
 } from "../utils/listingFormatters";
 
 const safetyOptions = ["Any", "Low", "Medium", "High"];
+const valueScoreFactors = [
+  { key: "affordability", label: "Affordability" },
+  { key: "commute", label: "Commute" },
+  { key: "safety", label: "Safety" },
+  { key: "amenities", label: "Amenities" },
+];
 
 const hasValue = (value) =>
   value !== undefined && value !== null && String(value).trim() !== "";
@@ -64,7 +71,135 @@ const getSearchChips = (search) =>
       search.safetyLevel !== "Any" && { label: search.safetyLevel },
   ].filter(Boolean);
 
-function ResultsFilters({ filters, onChange }) {
+const getWeightDisplayValue = (weights, key) => {
+  const rawWeight = Number(weights?.[key]);
+
+  if (!Number.isFinite(rawWeight)) {
+    return DEFAULT_VALUE_SCORE_WEIGHTS[key];
+  }
+
+  return Math.round(Math.max(0, Math.min(100, rawWeight)));
+};
+
+const getRawWeightTotal = (weights) =>
+  valueScoreFactors.reduce(
+    (total, factor) => total + getWeightDisplayValue(weights, factor.key),
+    0,
+  );
+
+const getTieBreakerValue = (value) =>
+  value === null ? Number.POSITIVE_INFINITY : value;
+
+const getSortableTitle = (listing) => {
+  const title = getListingTitle(listing);
+  return title === DATA_UNAVAILABLE ? "" : title;
+};
+
+const compareListingsByWeightedScore = (firstListing, secondListing, campus, weights) => {
+  const scoreDifference =
+    getWeightedValueScore(secondListing, campus, weights) -
+    getWeightedValueScore(firstListing, campus, weights);
+
+  if (scoreDifference !== 0) {
+    return scoreDifference;
+  }
+
+  const rentDifference =
+    getTieBreakerValue(getRentNumber(firstListing)) -
+    getTieBreakerValue(getRentNumber(secondListing));
+
+  if (rentDifference !== 0) {
+    return rentDifference;
+  }
+
+  const commuteDifference =
+    getTieBreakerValue(getCommuteMinutes(firstListing, campus)) -
+    getTieBreakerValue(getCommuteMinutes(secondListing, campus));
+
+  if (commuteDifference !== 0) {
+    return commuteDifference;
+  }
+
+  return getSortableTitle(firstListing).localeCompare(
+    getSortableTitle(secondListing),
+  );
+};
+
+function ValueScoreWeightControls({ weights, onWeightChange, onResetWeights }) {
+  const normalizedWeights = normalizeValueScoreWeights(weights);
+  const rawTotal = getRawWeightTotal(weights);
+  const showEffectiveWeights = rawTotal !== 100;
+
+  return (
+    <section
+      className="weight-controls"
+      aria-labelledby="weight-controls-title"
+    >
+      <div className="weight-controls-header">
+        <div>
+          <h4 id="weight-controls-title">Value Score Priorities</h4>
+          <p>
+            Adjust how much each factor affects the score and ranking. We
+            normalize the weights automatically.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="reset-weights-button"
+          onClick={onResetWeights}
+        >
+          Reset weights
+        </button>
+      </div>
+
+      <div className="weight-control-list">
+        {valueScoreFactors.map((factor) => {
+          const displayWeight = getWeightDisplayValue(weights, factor.key);
+          const effectiveWeight = Math.round(normalizedWeights[factor.key]);
+
+          return (
+            <label key={factor.key} className="weight-control">
+              <span className="weight-control-label">
+                <span>{factor.label}</span>
+                <span className="weight-control-value">{displayWeight}%</span>
+              </span>
+              <input
+                className="weight-slider"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value={displayWeight}
+                aria-label={`${factor.label} Value Score weight`}
+                onChange={(event) =>
+                  onWeightChange?.(factor.key, event.target.value)
+                }
+              />
+              {showEffectiveWeights && (
+                <small className="weight-effective-value">
+                  Effective {effectiveWeight}%
+                </small>
+              )}
+            </label>
+          );
+        })}
+      </div>
+
+      <p className="weight-helper-text">
+        Current total: {rawTotal}%. Scores use normalized weights so ranking
+        stays consistent.
+      </p>
+    </section>
+  );
+}
+
+function ResultsFilters({
+  filters,
+  onChange,
+  valueScoreWeights,
+  onWeightChange,
+  onResetWeights,
+}) {
   return (
     <section className="results-filter-panel" aria-labelledby="filters-title">
       <div>
@@ -137,6 +272,12 @@ function ResultsFilters({ filters, onChange }) {
           />
         </label>
       </div>
+
+      <ValueScoreWeightControls
+        weights={valueScoreWeights}
+        onWeightChange={onWeightChange}
+        onResetWeights={onResetWeights}
+      />
     </section>
   );
 }
@@ -154,11 +295,12 @@ export function ListingCard({
   onToggleSave,
   isCompared = false,
   onCompareListing,
+  valueScoreWeights,
 }) {
   const listingId = getListingId(listing);
   const amenities = getAmenities(listing);
   const safetyLevel = getSafetyLevel(listing);
-  const valueScore = getValueScore(listing, campus);
+  const valueScore = getWeightedValueScore(listing, campus, valueScoreWeights);
   const safetyClass =
     safetyLevel === DATA_UNAVAILABLE
       ? "unknown"
@@ -314,6 +456,9 @@ function BrowseResults({
   onCompareListing,
   onOpenCompare,
   onClearCompareStatus,
+  valueScoreWeights = DEFAULT_VALUE_SCORE_WEIGHTS,
+  onWeightChange,
+  onResetWeights,
 }) {
   const [activeListingSelection, setActiveListingSelection] = useState({
     filterKey: "",
@@ -360,9 +505,18 @@ function BrowseResults({
 
     return true;
   });
+  const rankedListings = [...filteredListings].sort((firstListing, secondListing) =>
+    compareListingsByWeightedScore(
+      firstListing,
+      secondListing,
+      search?.campus,
+      valueScoreWeights,
+    ),
+  );
   const badgesByListingId = getRecommendationBadgesByListingId(
-    filteredListings,
+    rankedListings,
     search?.campus,
+    valueScoreWeights,
   );
   const resultKey = [
     search?.campus,
@@ -387,7 +541,7 @@ function BrowseResults({
   const activeListingId =
     activeListingSelection.resultKey === resultKey &&
     activeListingSelection.filterKey === filterKey &&
-    filteredListings.some(
+    rankedListings.some(
       (listing) => getListingId(listing) === activeListingSelection.listingId,
     )
       ? activeListingSelection.listingId
@@ -441,12 +595,19 @@ function BrowseResults({
         </button>
       </div>
 
-      <ResultsFilters filters={filters} onChange={onFilterChange} />
+      <ResultsFilters
+        filters={filters}
+        onChange={onFilterChange}
+        valueScoreWeights={valueScoreWeights}
+        onWeightChange={onWeightChange}
+        onResetWeights={onResetWeights}
+      />
 
-      {!isLoading && !errorMessage && filteredListings.length > 0 && (
+      {!isLoading && !errorMessage && rankedListings.length > 0 && (
         <RecommendationSummary
-          listings={filteredListings}
+          listings={rankedListings}
           campus={search?.campus}
+          valueScoreWeights={valueScoreWeights}
         />
       )}
 
@@ -454,8 +615,8 @@ function BrowseResults({
         <div>
           <h2 id="results-title">Housing Results</h2>
           <p>
-            {filteredListings.length} listing
-            {filteredListings.length === 1 ? "" : "s"} found based on your
+            {rankedListings.length} listing
+            {rankedListings.length === 1 ? "" : "s"} found based on your
             preferences
           </p>
         </div>
@@ -510,7 +671,7 @@ function BrowseResults({
         </div>
       )}
 
-      {!isLoading && !errorMessage && filteredListings.length === 0 && (
+      {!isLoading && !errorMessage && rankedListings.length === 0 && (
         <div className="state-panel empty-state">
           <h3>No listings match these filters</h3>
           <p>
@@ -523,11 +684,11 @@ function BrowseResults({
         </div>
       )}
 
-      {!isLoading && !errorMessage && filteredListings.length > 0 && (
+      {!isLoading && !errorMessage && rankedListings.length > 0 && (
         <div className="results-map-layout">
           <div className="results-list-column">
             <div className="listing-grid">
-              {filteredListings.map((listing) => {
+              {rankedListings.map((listing) => {
                 const listingId = getListingId(listing);
 
                 return (
@@ -555,6 +716,7 @@ function BrowseResults({
                     onToggleSave={onToggleSave}
                     isCompared={compareListingIds.includes(listingId)}
                     onCompareListing={onCompareListing}
+                    valueScoreWeights={valueScoreWeights}
                   />
                 );
               })}
@@ -563,7 +725,7 @@ function BrowseResults({
 
           <ListingsMap
             activeListingId={activeListingId}
-            listings={filteredListings}
+            listings={rankedListings}
             onOpenDetails={onDetails}
             onSelectListing={(listingId) =>
               handleSelectListing(listingId, { scrollToCard: true })

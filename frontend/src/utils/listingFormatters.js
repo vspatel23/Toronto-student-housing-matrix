@@ -1,4 +1,13 @@
+import { DEFAULT_VALUE_SCORE_WEIGHTS } from "./constants";
+
 export const DATA_UNAVAILABLE = "Data unavailable";
+
+const VALUE_SCORE_WEIGHT_KEYS = [
+  "affordability",
+  "commute",
+  "safety",
+  "amenities",
+];
 
 const hasValue = (value) =>
   value !== undefined && value !== null && String(value).trim() !== "";
@@ -97,6 +106,16 @@ export const getListingId = (listing) => listing?._id || listing?.id || "";
 
 const clampScore = (score) =>
   Math.max(0, Math.min(100, Math.round(Number(score) || 0)));
+
+const clampWeight = (weight) => {
+  const numericWeight = Number(weight);
+
+  if (!Number.isFinite(numericWeight)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(100, numericWeight));
+};
 
 const getProvidedValueScore = (listing) => {
   const rawScore =
@@ -197,6 +216,42 @@ export const getValueScoreBreakdown = (listing, campus) => {
     safety: getSafetyScore(listing),
     amenities: getAmenitiesScore(listing),
   };
+};
+
+export const normalizeValueScoreWeights = (weights) => {
+  const sourceWeights =
+    weights && typeof weights === "object" ? weights : DEFAULT_VALUE_SCORE_WEIGHTS;
+  const safeWeights = VALUE_SCORE_WEIGHT_KEYS.reduce((normalized, key) => {
+    const clampedWeight = clampWeight(sourceWeights[key]);
+
+    normalized[key] =
+      clampedWeight === null ? DEFAULT_VALUE_SCORE_WEIGHTS[key] : clampedWeight;
+    return normalized;
+  }, {});
+  const totalWeight = VALUE_SCORE_WEIGHT_KEYS.reduce(
+    (total, key) => total + safeWeights[key],
+    0,
+  );
+
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+    return { ...DEFAULT_VALUE_SCORE_WEIGHTS };
+  }
+
+  return VALUE_SCORE_WEIGHT_KEYS.reduce((normalized, key) => {
+    normalized[key] = (safeWeights[key] / totalWeight) * 100;
+    return normalized;
+  }, {});
+};
+
+export const getWeightedValueScore = (listing, campus, weights) => {
+  const breakdown = getValueScoreBreakdown(listing, campus);
+  const normalizedWeights = normalizeValueScoreWeights(weights);
+  const weightedScore = VALUE_SCORE_WEIGHT_KEYS.reduce(
+    (score, key) => score + breakdown[key] * (normalizedWeights[key] / 100),
+    0,
+  );
+
+  return clampScore(weightedScore);
 };
 
 export const getValueScore = (listing, campus) => {

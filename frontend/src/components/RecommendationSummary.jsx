@@ -7,6 +7,7 @@ import {
   getListingTitle,
   getSafetyLevel,
   getValueScore,
+  getWeightedValueScore,
 } from "../utils/listingFormatters";
 
 const getRentNumber = (listing) => {
@@ -36,9 +37,15 @@ const formatAmenityList = (amenities) => {
   return `${visibleAmenities[0]}, ${visibleAmenities[1]}, and ${visibleAmenities[2]}`;
 };
 
-const compareListings = (firstListing, secondListing, campus) => {
+const getListingScore = (listing, campus, weights) =>
+  weights
+    ? getWeightedValueScore(listing, campus, weights)
+    : getValueScore(listing, campus);
+
+const compareListings = (firstListing, secondListing, campus, weights) => {
   const scoreDifference =
-    getValueScore(secondListing, campus) - getValueScore(firstListing, campus);
+    getListingScore(secondListing, campus, weights) -
+    getListingScore(firstListing, campus, weights);
 
   if (scoreDifference !== 0) {
     return scoreDifference;
@@ -63,13 +70,13 @@ const compareListings = (firstListing, secondListing, campus) => {
   return getDisplayTitle(firstListing).localeCompare(getDisplayTitle(secondListing));
 };
 
-const getRecommendedListing = (listings, campus) =>
+const getRecommendedListing = (listings, campus, weights) =>
   listings.reduce((bestListing, listing) => {
     if (!bestListing) {
       return listing;
     }
 
-    return compareListings(listing, bestListing, campus) < 0
+    return compareListings(listing, bestListing, campus, weights) < 0
       ? listing
       : bestListing;
   }, null);
@@ -115,19 +122,23 @@ const getRecommendationReasons = (listing, campus) => {
   return reasons.slice(0, 4);
 };
 
-function RecommendationSummary({ listings, campus }) {
+function RecommendationSummary({ listings, campus, valueScoreWeights }) {
   if (!Array.isArray(listings) || listings.length === 0) {
     return null;
   }
 
-  const recommendedListing = getRecommendedListing(listings, campus);
+  const recommendedListing = getRecommendedListing(
+    listings,
+    campus,
+    valueScoreWeights,
+  );
 
   if (!recommendedListing) {
     return null;
   }
 
   const title = getDisplayTitle(recommendedListing);
-  const valueScore = getValueScore(recommendedListing, campus);
+  const valueScore = getListingScore(recommendedListing, campus, valueScoreWeights);
   const reasons = getRecommendationReasons(recommendedListing, campus);
 
   return (
