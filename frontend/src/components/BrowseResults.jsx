@@ -152,6 +152,9 @@ export function ListingCard({
   isSaved = false,
   isSaving = false,
   onToggleSave,
+  isCompared = false,
+  onAddCompare,
+  onRemoveCompare,
 }) {
   const listingId = getListingId(listing);
   const amenities = getAmenities(listing);
@@ -243,6 +246,26 @@ export function ListingCard({
       )}
 
       <div className="listing-card-actions">
+        {onAddCompare && onRemoveCompare && (
+          <button
+            type="button"
+            className={`secondary-button compare-toggle-button${
+              isCompared ? " selected" : ""
+            }`}
+            disabled={!listingId}
+            aria-pressed={isCompared}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (isCompared) {
+                onRemoveCompare(listingId);
+              } else {
+                onAddCompare(listingId);
+              }
+            }}
+          >
+            {isCompared ? "Remove Compare" : "Add to Compare"}
+          </button>
+        )}
         <button
           type="button"
           className="details-button"
@@ -290,6 +313,13 @@ function BrowseResults({
   savedListingIds,
   savingListingIds,
   onToggleSave,
+  compareListingIds = [],
+  compareStatus = { type: "", message: "" },
+  maxCompareListings = 3,
+  onAddCompare,
+  onRemoveCompare,
+  onOpenCompare,
+  onClearCompareStatus,
 }) {
   const [activeListingSelection, setActiveListingSelection] = useState({
     filterKey: "",
@@ -388,6 +418,12 @@ function BrowseResults({
       });
     }
   };
+  const compareCount = compareListingIds.length;
+  const hasCompareStatus = hasValue(compareStatus.message);
+  const handleOpenCompare = () => {
+    onClearCompareStatus?.();
+    onOpenCompare?.();
+  };
 
   return (
     <section className="browse-page" aria-labelledby="results-title">
@@ -429,7 +465,32 @@ function BrowseResults({
             preferences
           </p>
         </div>
+        <div className="compare-toolbar" aria-label="Compare selected listings">
+          <div className="compare-count">
+            <span>Compare</span>
+            <strong>
+              {compareCount}/{maxCompareListings} selected
+            </strong>
+          </div>
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={compareCount === 0}
+            onClick={handleOpenCompare}
+          >
+            Compare Selected
+          </button>
+        </div>
       </div>
+
+      {hasCompareStatus && (
+        <p
+          className={`compare-status ${compareStatus.type || "info"}`}
+          role={compareStatus.type === "error" ? "alert" : "status"}
+        >
+          {compareStatus.message}
+        </p>
+      )}
 
       {isLoading && (
         <div className="state-panel loading-state" role="status">
@@ -499,6 +560,9 @@ function BrowseResults({
                     isSaved={savedListingIds?.has(listingId)}
                     isSaving={savingListingIds?.has(listingId)}
                     onToggleSave={onToggleSave}
+                    isCompared={compareListingIds.includes(listingId)}
+                    onAddCompare={onAddCompare}
+                    onRemoveCompare={onRemoveCompare}
                   />
                 );
               })}

@@ -15,11 +15,16 @@ import StepProgress from "./components/StepProgress";
 import SearchForm from "./components/SearchForm";
 import HelpCards from "./components/HelpCards";
 import BrowseResults from "./components/BrowseResults";
+import CompareListings from "./components/CompareListings";
 import ListingDetail from "./components/ListingDetail";
 import SavedListings from "./components/SavedListings";
+import { getListingId } from "./utils/listingFormatters";
+
+const MAX_COMPARE_LISTINGS = 3;
 
 function App() {
   const latestListingsRequestId = useRef(0);
+  const compareListingIdsRef = useRef([]);
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -70,6 +75,11 @@ function App() {
   const [isLoadingSavedListings, setIsLoadingSavedListings] = useState(false);
   const [savedListingsError, setSavedListingsError] = useState("");
   const [listingDetailOrigin, setListingDetailOrigin] = useState("results");
+  const [compareListingIds, setCompareListingIds] = useState([]);
+  const [compareStatus, setCompareStatus] = useState({
+    type: "",
+    message: "",
+  });
 
   const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
     setSavedPreference(null);
@@ -92,11 +102,18 @@ function App() {
     setSavingListingIds(new Set());
     setSavedListingsError("");
     setListingDetailOrigin("results");
+    compareListingIdsRef.current = [];
+    setCompareListingIds([]);
+    setCompareStatus({ type: "", message: "" });
     if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
       setFormData(defaultFormData);
     }
     setHasLoadedPreferenceIntoForm(false);
   };
+
+  useEffect(() => {
+    compareListingIdsRef.current = compareListingIds;
+  }, [compareListingIds]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -137,6 +154,9 @@ function App() {
         setStatus({ type: "", message: "" });
         setFormData(defaultFormData);
         setHasLoadedPreferenceIntoForm(false);
+        compareListingIdsRef.current = [];
+        setCompareListingIds([]);
+        setCompareStatus({ type: "", message: "" });
         setAuthStatus({
           type: "error",
           message: "Your saved login expired. Please log in again.",
@@ -656,6 +676,9 @@ function App() {
     setStatus({ type: "", message: "" });
     setValidationErrors({});
     setResultsError("");
+    compareListingIdsRef.current = [];
+    setCompareListingIds([]);
+    setCompareStatus({ type: "", message: "" });
 
     const searchSnapshot = { ...formData };
 
@@ -785,6 +808,72 @@ function App() {
     }));
   };
 
+  const clearCompareStatus = () => {
+    setCompareStatus({ type: "", message: "" });
+  };
+
+  const addListingToCompare = (listingId) => {
+    if (!listingId) {
+      return;
+    }
+
+    const currentIds = compareListingIdsRef.current;
+
+    if (currentIds.includes(listingId)) {
+      setCompareStatus({
+        type: "error",
+        message: "This listing is already in your comparison.",
+      });
+      return;
+    }
+
+    if (currentIds.length >= MAX_COMPARE_LISTINGS) {
+      setCompareStatus({
+        type: "error",
+        message:
+          "You can compare up to 3 listings at a time. Remove one before adding another.",
+      });
+      return;
+    }
+
+    const nextIds = [...currentIds, listingId];
+    compareListingIdsRef.current = nextIds;
+    setCompareListingIds(nextIds);
+    setCompareStatus({
+      type: "success",
+      message: "Listing added to your comparison.",
+    });
+  };
+
+  const removeListingFromCompare = (listingId) => {
+    if (!listingId) {
+      return;
+    }
+
+    const nextIds = compareListingIdsRef.current.filter(
+      (currentId) => currentId !== listingId,
+    );
+    compareListingIdsRef.current = nextIds;
+    setCompareListingIds(nextIds);
+    setCompareStatus({
+      type: "success",
+      message: "Listing removed from your comparison.",
+    });
+  };
+
+  const openCompareView = () => {
+    if (compareListingIds.length === 0) {
+      setCompareStatus({
+        type: "error",
+        message: "Add at least one listing before opening the compare view.",
+      });
+      return;
+    }
+
+    setListingDetailOrigin("results");
+    setCurrentView("compare");
+  };
+
   const openListingDetail = async (listingId) => {
     if (!listingId) {
       return;
@@ -843,6 +932,9 @@ function App() {
         ...activeSearch,
       }));
     }
+    compareListingIdsRef.current = [];
+    setCompareListingIds([]);
+    setCompareStatus({ type: "", message: "" });
     setCurrentView("search");
     setStatus({ type: "", message: "" });
   };
@@ -944,6 +1036,11 @@ function App() {
     campuses.find(
       (campus) => getCampusLabel(campus) === activeSearch?.campus,
     ) || null;
+  const comparedListings = compareListingIds
+    .map((listingId) =>
+      listings.find((listing) => getListingId(listing) === listingId),
+    )
+    .filter(Boolean);
 
   return (
     <main className="app-shell">
@@ -1000,6 +1097,13 @@ function App() {
           filters={resultsFilters}
           isLoading={isLoadingResults}
           errorMessage={resultsError}
+          compareListingIds={compareListingIds}
+          compareStatus={compareStatus}
+          maxCompareListings={MAX_COMPARE_LISTINGS}
+          onAddCompare={addListingToCompare}
+          onRemoveCompare={removeListingFromCompare}
+          onOpenCompare={openCompareView}
+          onClearCompareStatus={clearCompareStatus}
           onFilterChange={handleFilterChange}
           onDetails={openListingDetail}
           onEditSearch={returnToSearch}
@@ -1007,6 +1111,15 @@ function App() {
           savedListingIds={savedListingIds}
           savingListingIds={savingListingIds}
           onToggleSave={toggleSavedListing}
+        />
+      )}
+
+      {currentView === "compare" && (
+        <CompareListings
+          listings={comparedListings}
+          campus={activeSearch?.campus}
+          onRemoveCompare={removeListingFromCompare}
+          onBackToResults={returnToResults}
         />
       )}
 
