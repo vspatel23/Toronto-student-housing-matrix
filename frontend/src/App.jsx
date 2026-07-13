@@ -27,6 +27,16 @@ import { getListingId } from "./utils/listingFormatters";
 
 const MAX_COMPARE_LISTINGS = 3;
 
+const createDefaultResultsFilters = () => ({
+  minRent: "",
+  maxRent: "",
+  housingType: "All types",
+  safetyLevel: "Any",
+  maxCommute: "",
+  furnished: "Any",
+  amenities: [],
+});
+
 function App() {
   const latestListingsRequestId = useRef(0);
   const compareListingIdsRef = useRef([]);
@@ -57,13 +67,9 @@ function App() {
   const [listings, setListings] = useState([]);
   const [activeSearch, setActiveSearch] = useState(null);
   const [currentView, setCurrentView] = useState("search");
-  const [resultsFilters, setResultsFilters] = useState({
-    minRent: "",
-    maxRent: "",
-    housingType: "All types",
-    safetyLevel: "Any",
-    maxCommute: "",
-  });
+  const [resultsFilters, setResultsFilters] = useState(
+    createDefaultResultsFilters,
+  );
   const [isLoadingResults, setIsLoadingResults] = useState(false);
   const [resultsError, setResultsError] = useState("");
   const [selectedListingId, setSelectedListingId] = useState("");
@@ -96,6 +102,7 @@ function App() {
     setValidationErrors({});
     setListings([]);
     setActiveSearch(null);
+    setResultsFilters(createDefaultResultsFilters());
     setCurrentView("search");
     setResultsError("");
     setCampuses([]);
@@ -713,6 +720,7 @@ function App() {
       setHasLoadedPreferenceIntoForm(false);
       setActiveSearch(searchSnapshot);
       setResultsFilters({
+        ...createDefaultResultsFilters(),
         minRent: searchSnapshot.minRent,
         maxRent: searchSnapshot.maxRent,
         housingType: searchSnapshot.housingType,

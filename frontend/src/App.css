@@ -839,7 +839,7 @@ output {
 
 .results-filter-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
   gap: 16px;
 }
 
@@ -851,6 +851,82 @@ output {
 .results-filter-grid label span {
   margin: 0;
   font-size: 0.92rem;
+}
+
+.advanced-filter-section {
+  display: grid;
+  gap: 12px;
+  padding-top: 18px;
+  border-top: 1px solid #e5eaf2;
+}
+
+.amenity-filter-group {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.filter-group-label {
+  margin: 0;
+  padding: 0;
+  color: #273244;
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.results-filter-panel .selected-filter-count {
+  margin: -2px 0 0;
+  color: #4b5563;
+  font-size: 0.86rem;
+}
+
+.amenity-filter-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.amenity-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 7px 12px;
+  color: #273244;
+  background: #ffffff;
+  border: 1px solid #d5dde8;
+  border-radius: 999px;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 700;
+  transition:
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    color 160ms ease;
+}
+
+.amenity-filter-chip input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #244497;
+}
+
+.amenity-filter-chip.selected {
+  color: #173b7f;
+  background: #eef4ff;
+  border-color: #8fb7f2;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.09);
+}
+
+.amenity-filter-chip:hover,
+.amenity-filter-chip:focus-within {
+  border-color: #8fb7f2;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
 .weight-controls {
