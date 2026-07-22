@@ -6,6 +6,7 @@ import {
   housingTypes,
 } from "../utils/constants";
 import { getRecommendationBadgesByListingId } from "../utils/recommendationBadges";
+import CollapsiblePanel from "./CollapsiblePanel";
 import ListingCard from "./ListingCard";
 import ListingsMap from "./ListingsMap";
 import RecommendationSummary from "./RecommendationSummary";
@@ -58,6 +59,73 @@ const matchesNumberFilter = (value, min, max) => {
 
 const getSelectedAmenities = (filters) =>
   Array.isArray(filters?.amenities) ? filters.amenities : [];
+
+const getActiveFilterChips = (filters, onChange) => {
+  const chips = [];
+  const selectedAmenities = getSelectedAmenities(filters);
+
+  if (hasValue(filters?.minRent)) {
+    chips.push({
+      key: "minRent",
+      label: `Min $${filters.minRent}`,
+      onRemove: () => onChange("minRent", ""),
+    });
+  }
+
+  if (hasValue(filters?.maxRent)) {
+    chips.push({
+      key: "maxRent",
+      label: `Max $${filters.maxRent}`,
+      onRemove: () => onChange("maxRent", ""),
+    });
+  }
+
+  if (filters?.housingType && filters.housingType !== "All types") {
+    chips.push({
+      key: "housingType",
+      label: filters.housingType,
+      onRemove: () => onChange("housingType", "All types"),
+    });
+  }
+
+  if (filters?.safetyLevel && filters.safetyLevel !== "Any") {
+    chips.push({
+      key: "safetyLevel",
+      label: `${filters.safetyLevel} safety`,
+      onRemove: () => onChange("safetyLevel", "Any"),
+    });
+  }
+
+  if (hasValue(filters?.maxCommute)) {
+    chips.push({
+      key: "maxCommute",
+      label: `<= ${filters.maxCommute} min commute`,
+      onRemove: () => onChange("maxCommute", ""),
+    });
+  }
+
+  if (filters?.furnished && filters.furnished !== "Any") {
+    chips.push({
+      key: "furnished",
+      label: filters.furnished,
+      onRemove: () => onChange("furnished", "Any"),
+    });
+  }
+
+  selectedAmenities.forEach((amenity) => {
+    chips.push({
+      key: `amenity:${amenity}`,
+      label: amenity,
+      onRemove: () =>
+        onChange(
+          "amenities",
+          selectedAmenities.filter((current) => current !== amenity),
+        ),
+    });
+  });
+
+  return chips;
+};
 
 const getSearchChips = (search) =>
   [
@@ -217,160 +285,210 @@ function ValueScoreWeightControls({ weights, onWeightChange, onResetWeights }) {
 function ResultsFilters({
   filters,
   onChange,
+  onClearFilters,
   valueScoreWeights,
   onWeightChange,
   onResetWeights,
 }) {
   const selectedAmenities = getSelectedAmenities(filters);
+  const activeFilterChips = getActiveFilterChips(filters, onChange);
+  const hasActiveFilters = activeFilterChips.length > 0;
 
   return (
     <section className="results-filter-panel" aria-labelledby="filters-title">
-      <header className="filter-panel-header">
-        <div>
-          <p className="section-eyebrow">Display controls</p>
-          <h2 id="filters-title">Refine Results</h2>
-          <p>Adjust the displayed listings without changing your search.</p>
-        </div>
-        <div
-          className="sort-summary"
-          aria-label="Results sorted by Value Score, highest first"
-        >
-          <span>Sorted by</span>
-          <strong>Value Score</strong>
-          <small>Highest first</small>
-        </div>
-      </header>
-
-      <section className="filter-section" aria-labelledby="basic-filters-title">
-        <div className="filter-section-heading">
-          <h3 id="basic-filters-title">Basic filters</h3>
-          <p>Refine rent, housing type, safety, and commute.</p>
-        </div>
-        <div className="results-filter-grid basic-filter-grid">
-          <label>
-            <span>Minimum rent</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={filters.minRent}
-              onChange={(event) => onChange("minRent", event.target.value)}
-              placeholder="No minimum"
-            />
-          </label>
-
-          <label>
-            <span>Maximum rent</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={filters.maxRent}
-              onChange={(event) => onChange("maxRent", event.target.value)}
-              placeholder="No maximum"
-            />
-          </label>
-
-          <label>
-            <span>Housing type</span>
-            <select
-              value={filters.housingType}
-              onChange={(event) => onChange("housingType", event.target.value)}
+      <CollapsiblePanel
+        title="Refine Results"
+        subtitle="Adjust the displayed listings without changing your search."
+        headerExtra={
+          <>
+            <span className="filter-count-badge" aria-live="polite">
+              {activeFilterChips.length} active filter
+              {activeFilterChips.length === 1 ? "" : "s"}
+            </span>
+            <div
+              className="sort-summary"
+              aria-label="Results sorted by Value Score, highest first"
             >
-              {housingTypes.map((housingType) => (
-                <option key={housingType} value={housingType}>
-                  {housingType}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>Safety level</span>
-            <select
-              value={filters.safetyLevel}
-              onChange={(event) => onChange("safetyLevel", event.target.value)}
-            >
-              {safetyOptions.map((safetyLevel) => (
-                <option key={safetyLevel} value={safetyLevel}>
-                  {safetyLevel}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <label>
-            <span>Maximum commute</span>
-            <input
-              type="number"
-              min="0"
-              inputMode="numeric"
-              value={filters.maxCommute}
-              onChange={(event) => onChange("maxCommute", event.target.value)}
-              placeholder="Any"
-            />
-          </label>
-        </div>
-      </section>
-
-      <section
-        className="filter-section advanced-filter-section"
-        aria-labelledby="amenity-filters-title"
-      >
-        <div className="filter-section-heading">
-          <h3 id="amenity-filters-title">Furnishing and amenities</h3>
-          <p>Narrow results by setup and included features.</p>
-        </div>
-        <div className="furnishing-amenities-layout">
-          <label className="furnishing-filter">
-            <span>Furnishing</span>
-            <select
-              value={filters.furnished || "Any"}
-              onChange={(event) => onChange("furnished", event.target.value)}
-            >
-              {furnishedFilterOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          <fieldset className="amenity-filter-group">
-            <legend className="filter-group-label">Amenities</legend>
-            {selectedAmenities.length > 0 && (
-              <p className="selected-filter-count">
-                {selectedAmenities.length} amenity filter
-                {selectedAmenities.length === 1 ? "" : "s"} selected
-              </p>
-            )}
-            <div className="amenity-filter-options">
-              {advancedAmenityFilters.map((amenity) => {
-                const isSelected = selectedAmenities.includes(amenity);
-                const nextAmenities = isSelected
-                  ? selectedAmenities.filter((item) => item !== amenity)
-                  : [...selectedAmenities, amenity];
-
-                return (
-                  <label
-                    key={amenity}
-                    className={`amenity-filter-chip${
-                      isSelected ? " selected" : ""
-                    }`}
-                  >
-                    <input
-                      type="checkbox"
-                      checked={isSelected}
-                      onChange={() => onChange("amenities", nextAmenities)}
-                    />
-                    <span>{amenity}</span>
-                  </label>
-                );
-              })}
+              <span>Sorted by</span>
+              <strong>Value Score</strong>
+              <small>Highest first</small>
             </div>
-          </fieldset>
+          </>
+        }
+      >
+        <h2 id="filters-title" className="visually-hidden">
+          Refine Results
+        </h2>
+
+        <section
+          className="filter-section"
+          aria-labelledby="basic-filters-title"
+        >
+          <div className="filter-section-heading">
+            <h3 id="basic-filters-title">Basic filters</h3>
+            <p>Refine rent, housing type, safety, and commute.</p>
+          </div>
+          <div className="results-filter-grid basic-filter-grid">
+            <label>
+              <span>Minimum rent</span>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                value={filters.minRent}
+                onChange={(event) => onChange("minRent", event.target.value)}
+                placeholder="No minimum"
+              />
+            </label>
+
+            <label>
+              <span>Maximum rent</span>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                value={filters.maxRent}
+                onChange={(event) => onChange("maxRent", event.target.value)}
+                placeholder="No maximum"
+              />
+            </label>
+
+            <label>
+              <span>Housing type</span>
+              <select
+                value={filters.housingType}
+                onChange={(event) =>
+                  onChange("housingType", event.target.value)
+                }
+              >
+                {housingTypes.map((housingType) => (
+                  <option key={housingType} value={housingType}>
+                    {housingType}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Safety level</span>
+              <select
+                value={filters.safetyLevel}
+                onChange={(event) =>
+                  onChange("safetyLevel", event.target.value)
+                }
+              >
+                {safetyOptions.map((safetyLevel) => (
+                  <option key={safetyLevel} value={safetyLevel}>
+                    {safetyLevel}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label>
+              <span>Maximum commute</span>
+              <input
+                type="number"
+                min="0"
+                inputMode="numeric"
+                value={filters.maxCommute}
+                onChange={(event) =>
+                  onChange("maxCommute", event.target.value)
+                }
+                placeholder="Any"
+              />
+            </label>
+          </div>
+        </section>
+
+        <section
+          className="filter-section advanced-filter-section"
+          aria-labelledby="amenity-filters-title"
+        >
+          <div className="filter-section-heading">
+            <h3 id="amenity-filters-title">Furnishing and amenities</h3>
+            <p>Narrow results by setup and included features.</p>
+          </div>
+          <div className="furnishing-amenities-layout">
+            <label className="furnishing-filter">
+              <span>Furnishing</span>
+              <select
+                value={filters.furnished || "Any"}
+                onChange={(event) => onChange("furnished", event.target.value)}
+              >
+                {furnishedFilterOptions.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <fieldset className="amenity-filter-group">
+              <legend className="filter-group-label">Amenities</legend>
+              {selectedAmenities.length > 0 && (
+                <p className="selected-filter-count">
+                  {selectedAmenities.length} amenity filter
+                  {selectedAmenities.length === 1 ? "" : "s"} selected
+                </p>
+              )}
+              <div className="amenity-filter-options">
+                {advancedAmenityFilters.map((amenity) => {
+                  const isSelected = selectedAmenities.includes(amenity);
+                  const nextAmenities = isSelected
+                    ? selectedAmenities.filter((item) => item !== amenity)
+                    : [...selectedAmenities, amenity];
+
+                  return (
+                    <label
+                      key={amenity}
+                      className={`amenity-filter-chip${
+                        isSelected ? " selected" : ""
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => onChange("amenities", nextAmenities)}
+                      />
+                      <span>{amenity}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </fieldset>
+          </div>
+        </section>
+      </CollapsiblePanel>
+
+      {hasActiveFilters && (
+        <div
+          className="active-filter-chips-row"
+          aria-label="Active refinement filters"
+        >
+          {activeFilterChips.map((chip) => (
+            <button
+              key={chip.key}
+              type="button"
+              className="active-filter-chip"
+              onClick={chip.onRemove}
+              aria-label={`Remove filter: ${chip.label}`}
+            >
+              <span>{chip.label}</span>
+              <span className="active-filter-chip-remove" aria-hidden="true">
+                ×
+              </span>
+            </button>
+          ))}
+          <button
+            type="button"
+            className="clear-all-filters-button"
+            onClick={onClearFilters}
+          >
+            Clear All
+          </button>
         </div>
-      </section>
+      )}
 
       <ValueScoreWeightControls
         weights={valueScoreWeights}
@@ -389,6 +507,7 @@ function BrowseResults({
   isLoading,
   errorMessage,
   onFilterChange,
+  onClearFilters,
   onDetails,
   onEditSearch,
   onRetry,
@@ -622,6 +741,7 @@ function BrowseResults({
       <ResultsFilters
         filters={filters}
         onChange={onFilterChange}
+        onClearFilters={onClearFilters}
         valueScoreWeights={valueScoreWeights}
         onWeightChange={onWeightChange}
         onResetWeights={onResetWeights}
