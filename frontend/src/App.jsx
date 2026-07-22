@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import "./App.css";
+import "./styles/ui-cleanup.css";
 import {
   AUTH_TOKEN_KEY,
   AUTH_USER_KEY,
@@ -23,7 +24,9 @@ import BrowseResults from "./components/BrowseResults";
 import CompareListings from "./components/CompareListings";
 import ListingDetail from "./components/ListingDetail";
 import SavedListings from "./components/SavedListings";
+import StatusMessage from "./components/StatusMessage";
 import { getListingId } from "./utils/listingFormatters";
+import { getRecommendationBadgesByListingId } from "./utils/recommendationBadges";
 
 const MAX_COMPARE_LISTINGS = 3;
 
@@ -60,10 +63,6 @@ function App() {
   const [campuses, setCampuses] = useState([]);
   const [isLoadingCampuses, setIsLoadingCampuses] = useState(false);
   const [campusError, setCampusError] = useState("");
-  const [savedPreference, setSavedPreference] = useState(null);
-  const [savedPreferences, setSavedPreferences] = useState([]);
-  const [hasLoadedPreferenceIntoForm, setHasLoadedPreferenceIntoForm] =
-    useState(false);
   const [listings, setListings] = useState([]);
   const [activeSearch, setActiveSearch] = useState(null);
   const [currentView, setCurrentView] = useState("search");
@@ -77,15 +76,19 @@ function App() {
   const [isLoadingListing, setIsLoadingListing] = useState(false);
   const [listingError, setListingError] = useState("");
   const [isSavingPreference, setIsSavingPreference] = useState(false);
-  const [isLoadingSaved, setIsLoadingSaved] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
   const [isLoadingRecentSearches, setIsLoadingRecentSearches] = useState(false);
   const [savedListings, setSavedListings] = useState([]);
   const [savedListingIds, setSavedListingIds] = useState(() => new Set());
   const [savingListingIds, setSavingListingIds] = useState(() => new Set());
+  const [listingActionStatus, setListingActionStatus] = useState({
+    type: "",
+    message: "",
+  });
   const [isLoadingSavedListings, setIsLoadingSavedListings] = useState(false);
   const [savedListingsError, setSavedListingsError] = useState("");
   const [listingDetailOrigin, setListingDetailOrigin] = useState("results");
+  const [compareOrigin, setCompareOrigin] = useState("results");
   const [compareListingIds, setCompareListingIds] = useState([]);
   const [compareStatus, setCompareStatus] = useState({
     type: "",
@@ -95,9 +98,7 @@ function App() {
     ...DEFAULT_VALUE_SCORE_WEIGHTS,
   });
 
-  const clearDisplayedPreferences = ({ resetLoadedForm = false } = {}) => {
-    setSavedPreference(null);
-    setSavedPreferences([]);
+  const resetSessionState = ({ resetForm = false } = {}) => {
     setStatus({ type: "", message: "" });
     setValidationErrors({});
     setListings([]);
@@ -115,21 +116,58 @@ function App() {
     setSavedListings([]);
     setSavedListingIds(new Set());
     setSavingListingIds(new Set());
+    setListingActionStatus({ type: "", message: "" });
     setSavedListingsError("");
     setListingDetailOrigin("results");
+    setCompareOrigin("results");
     compareListingIdsRef.current = [];
     setCompareListingIds([]);
     setCompareStatus({ type: "", message: "" });
     setValueScoreWeights({ ...DEFAULT_VALUE_SCORE_WEIGHTS });
-    if (resetLoadedForm && hasLoadedPreferenceIntoForm) {
+    if (resetForm) {
       setFormData(defaultFormData);
     }
-    setHasLoadedPreferenceIntoForm(false);
   };
 
   useEffect(() => {
     compareListingIdsRef.current = compareListingIds;
   }, [compareListingIds]);
+
+  useEffect(() => {
+    if (!compareStatus.message) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setCompareStatus({ type: "", message: "" });
+    }, 4500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [compareStatus.message]);
+
+  useEffect(() => {
+    if (!listingActionStatus.message) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setListingActionStatus({ type: "", message: "" });
+    }, 4500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [listingActionStatus.message]);
+
+  useEffect(() => {
+    if (authStatus.type !== "success" || !authStatus.message) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setAuthStatus({ type: "", message: "" });
+    }, 4500);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [authStatus.message, authStatus.type]);
 
   useEffect(() => {
     const storedToken = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -165,11 +203,8 @@ function App() {
 
         clearAuthStorage();
         setAuthUser(null);
-        setSavedPreference(null);
-        setSavedPreferences([]);
         setStatus({ type: "", message: "" });
         setFormData(defaultFormData);
-        setHasLoadedPreferenceIntoForm(false);
         compareListingIdsRef.current = [];
         setCompareListingIds([]);
         setCompareStatus({ type: "", message: "" });
@@ -273,7 +308,7 @@ function App() {
       if (isUnauthorizedError(error)) {
         clearAuthStorage();
         setAuthUser(null);
-        clearDisplayedPreferences({ resetLoadedForm: true });
+        resetSessionState({ resetForm: true });
         setAuthStatus({
           type: "error",
           message: "Your saved login expired. Please log in again.",
@@ -388,6 +423,7 @@ function App() {
 
     const wasSaved = savedListingIds.has(listingId);
 
+    setListingActionStatus({ type: "", message: "" });
     setSavingListingIds((current) => new Set(current).add(listingId));
     setSavedListingIds((current) => {
       const next = new Set(current);
@@ -421,6 +457,12 @@ function App() {
         });
         await loadSavedListings();
       }
+      setListingActionStatus({
+        type: "success",
+        message: wasSaved
+          ? "Listing removed from Saved Listings."
+          : "Listing saved.",
+      });
     } catch (error) {
       setSavedListingIds((current) => {
         const next = new Set(current);
@@ -435,7 +477,7 @@ function App() {
       if (isUnauthorizedError(error)) {
         clearAuthStorage();
         setAuthUser(null);
-        clearDisplayedPreferences({ resetLoadedForm: true });
+        resetSessionState({ resetForm: true });
         setAuthStatus({
           type: "error",
           message: "Your saved login expired. Please log in again.",
@@ -443,7 +485,7 @@ function App() {
         return;
       }
 
-      setStatus({
+      setListingActionStatus({
         type: "error",
         message: wasSaved
           ? "We couldn't remove this listing from your saved list. Please try again."
@@ -525,7 +567,7 @@ function App() {
 
       localStorage.setItem(AUTH_TOKEN_KEY, data.token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
-      clearDisplayedPreferences({ resetLoadedForm: true });
+      resetSessionState({ resetForm: true });
       setAuthUser(data.user);
       setAuthForm({ name: "", email: "", password: "" });
       setAuthStatus({
@@ -551,9 +593,10 @@ function App() {
   const handleLogout = () => {
     clearAuthStorage();
     setAuthUser(null);
+    setAuthMode("login");
     setAuthForm({ name: "", email: "", password: "" });
-    clearDisplayedPreferences({ resetLoadedForm: true });
-    setAuthStatus({ type: "success", message: "You have logged out." });
+    resetSessionState({ resetForm: true });
+    setAuthStatus({ type: "success", message: "You’re logged out." });
   };
 
   const updateField = (field, value) => {
@@ -563,7 +606,6 @@ function App() {
       delete nextErrors[field];
       return nextErrors;
     });
-    setHasLoadedPreferenceIntoForm(false);
     setFormData((currentData) => ({
       ...currentData,
       [field]: value,
@@ -580,7 +622,6 @@ function App() {
       delete nextErrors.maxRent;
       return nextErrors;
     });
-    setHasLoadedPreferenceIntoForm(false);
     setFormData((currentData) => {
       const nextData = {
         ...currentData,
@@ -699,7 +740,7 @@ function App() {
     const searchSnapshot = { ...formData };
 
     try {
-      const preferenceData = await apiRequest("/api/preferences", {
+      await apiRequest("/api/preferences", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${authToken}`,
@@ -708,16 +749,10 @@ function App() {
         body: JSON.stringify(formData),
       });
 
-      setSavedPreference(preferenceData.preference);
-      setSavedPreferences((currentPreferences) => [
-        preferenceData.preference,
-        ...currentPreferences,
-      ]);
       setStatus({
         type: "success",
         message: "Your preferences were saved successfully.",
       });
-      setHasLoadedPreferenceIntoForm(false);
       setActiveSearch(searchSnapshot);
       setResultsFilters({
         ...createDefaultResultsFilters(),
@@ -773,7 +808,7 @@ function App() {
       if (isUnauthorizedError(error)) {
         clearAuthStorage();
         setAuthUser(null);
-        clearDisplayedPreferences({ resetLoadedForm: true });
+        resetSessionState({ resetForm: true });
         setAuthStatus({
           type: "error",
           message: "Your saved login expired. Please log in again.",
@@ -878,7 +913,7 @@ function App() {
     setCompareListingIds(nextIds);
     setCompareStatus({
       type: "success",
-      message: "Listing added to your comparison.",
+      message: "Added to comparison.",
     });
     return true;
   };
@@ -895,11 +930,16 @@ function App() {
     setCompareListingIds(nextIds);
     setCompareStatus({
       type: "success",
-      message: "Listing removed from your comparison.",
+      message: "Removed from comparison.",
     });
   };
 
   const openCompareView = () => {
+    setCompareOrigin(
+      currentView === "details" && listingDetailOrigin === "saved"
+        ? "saved"
+        : "results",
+    );
     setListingDetailOrigin("results");
     setCurrentView("compare");
   };
@@ -918,17 +958,18 @@ function App() {
     openCompareView();
   };
 
-  const openListingDetail = async (listingId) => {
+  const openListingDetail = async (listingId, originOverride = "") => {
     if (!listingId) {
       return;
     }
 
     setListingDetailOrigin(
-      currentView === "saved"
-        ? "saved"
-        : currentView === "compare"
-          ? "compare"
-          : "results",
+      originOverride ||
+        (currentView === "saved"
+          ? "saved"
+          : currentView === "compare"
+            ? "compare"
+            : "results"),
     );
     setSelectedListingId(listingId);
     setSelectedListing(null);
@@ -954,7 +995,7 @@ function App() {
 
   const retryListingDetail = () => {
     if (selectedListingId) {
-      openListingDetail(selectedListingId);
+      openListingDetail(selectedListingId, listingDetailOrigin);
     }
   };
 
@@ -966,7 +1007,13 @@ function App() {
 
   const returnFromCompare = () => {
     setListingDetailOrigin("results");
-    setCurrentView(activeSearch ? "results" : "search");
+    setCurrentView(
+      compareOrigin === "saved"
+        ? "saved"
+        : activeSearch
+          ? "results"
+          : "search",
+    );
   };
 
   const openSavedListings = () => {
@@ -992,80 +1039,16 @@ function App() {
     setStatus({ type: "", message: "" });
   };
 
-  const loadSavedPreferences = async () => {
-    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
-    if (!authUser || !authToken) {
-      setStatus({
-        type: "error",
-        message: "Please log in to load your saved preferences.",
-      });
-      return;
-    }
-
-    setIsLoadingSaved(true);
-    setStatus({ type: "", message: "" });
-
-    try {
-      const data = await apiRequest("/api/preferences", {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
-      });
-      const preferences = data.preferences || [];
-      const latestPreference = preferences[0];
-
-      setSavedPreferences(preferences);
-      setSavedPreference(latestPreference || null);
-
-      if (latestPreference) {
-        setFormData((currentData) => ({
-          ...currentData,
-          campus: latestPreference.campus || currentData.campus,
-          housingType: latestPreference.housingType || currentData.housingType,
-          minRent: latestPreference.minRent ?? currentData.minRent,
-          maxRent: latestPreference.maxRent ?? currentData.maxRent,
-          maxCommute: latestPreference.maxCommute ?? currentData.maxCommute,
-          safetyLevel: latestPreference.safetyLevel || currentData.safetyLevel,
-          amenities: latestPreference.amenities || currentData.amenities,
-          notes: latestPreference.notes || currentData.notes,
-        }));
-        setHasLoadedPreferenceIntoForm(true);
-      } else {
-        setHasLoadedPreferenceIntoForm(false);
-      }
-
-      setStatus({
-        type: preferences.length > 0 ? "success" : "error",
-        message:
-          preferences.length > 0
-            ? "Your saved preferences were loaded."
-            : "No saved preferences found for your account.",
-      });
-    } catch (error) {
-      if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        clearDisplayedPreferences({ resetLoadedForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
-        return;
-      }
-
-      setStatus({
-        type: "error",
-        message: "We couldn’t load your saved preferences. Please try again.",
-      });
-    } finally {
-      setIsLoadingSaved(false);
-    }
-  };
-
   if (isAuthChecking) {
     return (
       <main className="auth-page">
-        <div className="auth-loading">Loading...</div>
+        <section className="auth-check-card" aria-labelledby="auth-check-title">
+          <span className="spinner" aria-hidden="true"></span>
+          <div role="status" aria-live="polite">
+            <h1 id="auth-check-title">Checking your account</h1>
+            <p>Restoring your saved session…</p>
+          </div>
+        </section>
       </main>
     );
   }
@@ -1089,20 +1072,62 @@ function App() {
     campuses.find(
       (campus) => getCampusLabel(campus) === activeSearch?.campus,
     ) || null;
+  const comparisonListingPool = Array.from(
+    new Map(
+      [...listings, ...savedListings, ...(selectedListing ? [selectedListing] : [])]
+        .filter((listing) => getListingId(listing))
+        .map((listing) => [getListingId(listing), listing]),
+    ).values(),
+  );
   const comparedListings = compareListingIds
     .map((listingId) =>
-      listings.find((listing) => getListingId(listing) === listingId),
+      comparisonListingPool.find(
+        (listing) => getListingId(listing) === listingId,
+      ),
     )
     .filter(Boolean);
+  const comparisonAvailableListings = Array.from(
+    new Map(
+      [
+        ...(listings.length > 0 ? listings : savedListings),
+        ...comparedListings,
+      ]
+        .filter((listing) => getListingId(listing))
+        .map((listing) => [getListingId(listing), listing]),
+    ).values(),
+  );
+  const recommendationBadgesByListingId =
+    getRecommendationBadgesByListingId(
+      listings,
+      activeSearch?.campus,
+      valueScoreWeights,
+    );
 
   return (
     <main className="app-shell">
       <Header
+        currentView={currentView}
         userName={displayName}
         onLogout={handleLogout}
         onOpenSaved={openSavedListings}
+        onOpenSearch={returnToSearch}
       />
       {currentView !== "saved" && <StepProgress currentStep={currentView} />}
+
+      {(authStatus.message || listingActionStatus.message) && (
+        <div className="app-feedback-region" aria-label="Application notifications">
+          {authStatus.message && (
+            <StatusMessage type={authStatus.type || "info"}>
+              {authStatus.message}
+            </StatusMessage>
+          )}
+          {listingActionStatus.message && (
+            <StatusMessage type={listingActionStatus.type || "info"}>
+              {listingActionStatus.message}
+            </StatusMessage>
+          )}
+        </div>
+      )}
 
       {currentView === "search" && (
         <>
@@ -1123,16 +1148,11 @@ function App() {
             isSavingPreference={isSavingPreference}
             isSearchingListings={isLoadingResults}
             isLoadingCampuses={isLoadingCampuses}
-            isLoadingSaved={isLoadingSaved}
             campusError={campusError}
             validationErrors={validationErrors}
-            savedPreference={savedPreference}
-            savedPreferences={savedPreferences}
-            userName={displayName}
             onFieldChange={updateField}
             onRentChange={handleRentChange}
             onSubmit={handleSubmit}
-            onLoadSaved={loadSavedPreferences}
             onRetryCampuses={retryCampuses}
             recentSearches={recentSearches}
             isLoadingRecentSearches={isLoadingRecentSearches}
@@ -1172,14 +1192,22 @@ function App() {
       {currentView === "compare" && (
         <CompareListings
           listings={comparedListings}
-          availableListings={listings}
+          availableListings={comparisonAvailableListings}
           campus={activeSearch?.campus}
           compareStatus={compareStatus}
           maxCompareListings={MAX_COMPARE_LISTINGS}
           valueScoreWeights={valueScoreWeights}
+          savedListingIds={savedListingIds}
+          savingListingIds={savingListingIds}
+          onToggleSave={toggleSavedListing}
           onAddCompare={addListingToCompare}
           onRemoveCompare={removeListingFromCompare}
           onBackToResults={returnFromCompare}
+          backLabel={
+            compareOrigin === "saved"
+              ? "Back to Saved Listings"
+              : "Back to Results"
+          }
           onDetails={openListingDetail}
         />
       )}
@@ -1187,14 +1215,21 @@ function App() {
       {currentView === "saved" && (
         <SavedListings
           listings={savedListings}
+          campus={activeSearch?.campus}
           isLoading={isLoadingSavedListings}
           errorMessage={savedListingsError}
           onDetails={openListingDetail}
           onBack={returnFromSavedListings}
+          backLabel={activeSearch ? "Back to Results" : "Back to Search"}
+          emptyActionLabel={activeSearch ? "Browse Results" : "Start a Search"}
           onRetry={loadSavedListings}
           savedListingIds={savedListingIds}
           savingListingIds={savingListingIds}
           onToggleSave={toggleSavedListing}
+          compareListingIds={compareListingIds}
+          onCompareListing={openCompareWithListing}
+          badgesByListingId={recommendationBadgesByListingId}
+          valueScoreWeights={valueScoreWeights}
         />
       )}
 
@@ -1202,16 +1237,25 @@ function App() {
         <ListingDetail
           listing={selectedListing}
           campus={activeSearch?.campus}
+          badges={recommendationBadgesByListingId[selectedListingId] || []}
           isLoading={isLoadingListing}
           errorMessage={listingError}
           onBack={returnToResults}
           backLabel={
-            listingDetailOrigin === "compare" ? "Back to Compare" : "Back to Results"
+            listingDetailOrigin === "compare"
+              ? "Back to Compare"
+              : listingDetailOrigin === "saved"
+                ? "Back to Saved Listings"
+                : "Back to Results"
           }
           onRetry={retryListingDetail}
           isSaved={savedListingIds.has(selectedListingId)}
           isSaving={savingListingIds.has(selectedListingId)}
           onToggleSave={toggleSavedListing}
+          isCompared={compareListingIds.includes(selectedListingId)}
+          compareCount={compareListingIds.length}
+          maxCompareListings={MAX_COMPARE_LISTINGS}
+          onCompareListing={openCompareWithListing}
           valueScoreWeights={valueScoreWeights}
         />
       )}

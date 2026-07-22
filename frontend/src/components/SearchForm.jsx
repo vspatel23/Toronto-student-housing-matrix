@@ -1,6 +1,6 @@
 import { housingTypes, safetyLevels } from "../utils/constants";
-import { formatDate } from "../utils/api";
 import { getCampusLabel } from "../utils/campusFormatters";
+import RecentSearches from "./RecentSearches";
 import StatusMessage from "./StatusMessage";
 
 function SearchForm({
@@ -10,16 +10,11 @@ function SearchForm({
   isSavingPreference,
   isSearchingListings,
   isLoadingCampuses,
-  isLoadingSaved,
   campusError,
   validationErrors,
-  savedPreference,
-  savedPreferences,
-  userName,
   onFieldChange,
   onRentChange,
   onSubmit,
-  onLoadSaved,
   onRetryCampuses,
   recentSearches = [],
   isLoadingRecentSearches = false,
@@ -27,271 +22,255 @@ function SearchForm({
   const isSubmittingSearch = isSavingPreference || isSearchingListings;
 
   return (
-    <section className="search-card" aria-labelledby="criteria-title">
-      <h2 id="criteria-title">⌕ Set Your Search Criteria</h2>
-
-      <form onSubmit={onSubmit}>
-        <div className="form-grid">
-          <label>
-            <span>♙ Select Campus</span>
-            <select
-              id="campus"
-              value={formData.campus}
-              onChange={(event) => onFieldChange("campus", event.target.value)}
-              disabled={isLoadingCampuses || campuses.length === 0}
-              aria-invalid={validationErrors.campus ? "true" : "false"}
-              aria-describedby={
-                validationErrors.campus || campusError ? "campus-message" : undefined
-              }
-            >
-              <option value="">
-                {isLoadingCampuses
-                  ? "Loading campuses…"
-                  : campuses.length === 0
-                    ? "No campuses available"
-                    : "Choose a campus..."}
-              </option>
-              {campuses.map((campus) => (
-                <option key={campus._id} value={getCampusLabel(campus)}>
-                  {getCampusLabel(campus)}
-                </option>
-              ))}
-            </select>
-            {validationErrors.campus && (
-              <p className="validation-message" id="campus-message">
-                {validationErrors.campus}
-              </p>
-            )}
-            {!validationErrors.campus && isLoadingCampuses && (
-              <p className="helper info" id="campus-message" role="status">
-                Loading campuses…
-              </p>
-            )}
-            {!validationErrors.campus && campusError && (
-              <div className="field-status-row" id="campus-message">
-                <p className="helper warning">{campusError}</p>
-                <button type="button" className="inline-retry-button" onClick={onRetryCampuses}>
-                  Retry
-                </button>
-              </div>
-            )}
-          </label>
-
-          <label>
-            <span>⌂ Housing Type</span>
-            <select
-              value={formData.housingType}
-              onChange={(event) =>
-                onFieldChange("housingType", event.target.value)
-              }
-            >
-              {housingTypes.map((housingType) => (
-                <option key={housingType} value={housingType}>
-                  {housingType}
-                </option>
-              ))}
-            </select>
-          </label>
+    <div className="dashboard-content">
+      <section className="search-card" aria-labelledby="criteria-title">
+        <div className="section-heading-row search-card-heading">
+          <div>
+            <p className="section-eyebrow">Housing criteria</p>
+            <h2 id="criteria-title">Set Your Search Criteria</h2>
+            <p>
+              Choose the factors that matter most. You can adjust these details
+              before viewing results.
+            </p>
+          </div>
         </div>
 
-        <div className="range-section">
-          <div className="range-heading">
-            <span>$ Monthly Price Range</span>
-            <strong>
-              ${formData.minRent} - ${formData.maxRent}
-            </strong>
-          </div>
-          <label className="range-row">
-            <span>Min</span>
-            <input
-              id="minRent"
-              type="range"
-              min="500"
-              max="3000"
-              step="50"
-              value={formData.minRent}
-              onChange={(event) =>
-                onRentChange("minRent", event.target.value)
-              }
-            />
-            <output>${formData.minRent}</output>
-          </label>
-          <label className="range-row">
-            <span>Max</span>
-            <input
-              id="maxRent"
-              type="range"
-              min="500"
-              max="3000"
-              step="50"
-              value={formData.maxRent}
-              onChange={(event) =>
-                onRentChange("maxRent", event.target.value)
-              }
-              aria-invalid={validationErrors.maxRent ? "true" : "false"}
-              aria-describedby={
-                validationErrors.maxRent ? "max-rent-message" : undefined
-              }
-            />
-            <output>${formData.maxRent}</output>
-          </label>
-          {validationErrors.maxRent && (
-            <p className="validation-message" id="max-rent-message">
-              {validationErrors.maxRent}
+        <form className="search-form" onSubmit={onSubmit} noValidate>
+          <fieldset className="form-section">
+            <legend>Campus and housing type</legend>
+            <p className="form-section-helper">
+              Start with where you study and the kind of home you want.
             </p>
-          )}
-        </div>
-
-        <div className="form-grid">
-          <div className="range-section compact">
-            <div className="range-heading">
-              <span>◷ Max TTC Commute</span>
-              <strong>{formData.maxCommute} min</strong>
-            </div>
-            <p className={formData.campus ? "helper good" : "helper warning"}>
-              {formData.campus
-                ? `Commute to: ${formData.campus}`
-                : "Select a campus first"}
-            </p>
-            <input
-              id="maxCommute"
-              type="range"
-              min="10"
-              max="60"
-              step="5"
-              value={formData.maxCommute}
-              onChange={(event) =>
-                onFieldChange("maxCommute", Number(event.target.value))
-              }
-            />
-            <div className="range-scale">
-              <span>10 min</span>
-              <span>60 min</span>
-            </div>
-          </div>
-
-          <fieldset className="safety-fieldset">
-            <legend>♢ Minimum Safety Level</legend>
-            <p>Based on historical crime data</p>
-            <div className="segmented-control">
-              {safetyLevels.map((level) => (
-                <button
-                  key={level}
-                  type="button"
-                  className={
-                    formData.safetyLevel === level ? "selected" : ""
+            <div className="form-grid">
+              <label className="form-field" htmlFor="campus">
+                <span>Campus</span>
+                <select
+                  id="campus"
+                  value={formData.campus}
+                  onChange={(event) =>
+                    onFieldChange("campus", event.target.value)
                   }
-                  onClick={() => onFieldChange("safetyLevel", level)}
+                  disabled={isLoadingCampuses || campuses.length === 0}
+                  aria-invalid={validationErrors.campus ? "true" : "false"}
+                  aria-describedby="campus-message"
                 >
-                  {level}
-                </button>
-              ))}
+                  <option value="">
+                    {isLoadingCampuses
+                      ? "Loading campuses…"
+                      : campuses.length === 0
+                        ? "No campuses available"
+                        : "Choose a campus"}
+                  </option>
+                  {campuses.map((campus) => (
+                    <option key={campus._id} value={getCampusLabel(campus)}>
+                      {getCampusLabel(campus)}
+                    </option>
+                  ))}
+                </select>
+                <div className="field-message-slot" id="campus-message">
+                  {validationErrors.campus && (
+                    <p className="validation-message">
+                      {validationErrors.campus}
+                    </p>
+                  )}
+                  {!validationErrors.campus && isLoadingCampuses && (
+                    <p className="helper info" role="status">
+                      Loading campus options…
+                    </p>
+                  )}
+                  {!validationErrors.campus && campusError && (
+                    <div className="field-status-row">
+                      <p className="helper warning">{campusError}</p>
+                      <button
+                        type="button"
+                        className="button button-secondary button-small"
+                        onClick={onRetryCampuses}
+                      >
+                        Retry
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </label>
+
+              <label className="form-field" htmlFor="housing-type">
+                <span>Housing type</span>
+                <select
+                  id="housing-type"
+                  value={formData.housingType}
+                  onChange={(event) =>
+                    onFieldChange("housingType", event.target.value)
+                  }
+                >
+                  {housingTypes.map((housingType) => (
+                    <option key={housingType} value={housingType}>
+                      {housingType}
+                    </option>
+                  ))}
+                </select>
+                <div className="field-message-slot" aria-hidden="true" />
+              </label>
             </div>
           </fieldset>
-        </div>
 
-        <label className="notes-field">
-          <span>Optional notes</span>
-          <textarea
-            rows="3"
-            value={formData.notes}
-            placeholder="Example: prefers furnished rooms or quiet neighbourhoods"
-            onChange={(event) => onFieldChange("notes", event.target.value)}
-          />
-        </label>
-
-        {status.message && (
-          <StatusMessage type={status.type || "info"}>
-            {status.message}
-          </StatusMessage>
-        )}
-
-        {isSearchingListings && (
-          <StatusMessage type="loading">
-            Searching for matching listings...
-          </StatusMessage>
-        )}
-
-        <button className="submit-button" type="submit" disabled={isSubmittingSearch}>
-          ⌕{" "}
-          {isSearchingListings
-            ? "Searching..."
-            : isSavingPreference
-              ? "Saving..."
-              : "Find Housing"}
-        </button>
-      </form>
-
-      <div className="session-panel">
-        <span>Saved to account</span>
-        <code>{userName}</code>
-        <button
-          type="button"
-          className="link-button"
-          onClick={onLoadSaved}
-          disabled={isLoadingSaved}
-        >
-          {isLoadingSaved ? "Loading..." : "Load Saved Preferences"}
-        </button>
-      </div>
-
-      {savedPreference && (
-        <section className="summary-panel" aria-label="Saved preference">
-          <h3>Current Saved Search</h3>
-          <p>
-            {savedPreference.campus} · {savedPreference.housingType} · $
-            {savedPreference.minRent}-${savedPreference.maxRent} · Up to{" "}
-            {savedPreference.maxCommute} min · {savedPreference.safetyLevel}
-          </p>
-        </section>
-      )}
-
-      {savedPreferences.length > 0 && (
-        <section className="saved-list" aria-label="Previous preferences">
-          <h3>Saved Preferences</h3>
-          <div className="saved-grid">
-            {savedPreferences.map((preference) => (
-              <article key={preference._id} className="saved-item">
-                <strong>{preference.campus || "No campus selected"}</strong>
-                <span>{formatDate(preference.createdAt)}</span>
-                <p>
-                  {preference.housingType} · ${preference.minRent}-$
-                  {preference.maxRent} · {preference.maxCommute} min ·{" "}
-                  {preference.safetyLevel}
+          <fieldset className="form-section">
+            <legend>Rent</legend>
+            <div className="range-heading">
+              <p className="form-section-helper">
+                Set your preferred monthly rent range.
+              </p>
+              <output className="range-summary" htmlFor="minRent maxRent">
+                ${formData.minRent} – ${formData.maxRent}
+              </output>
+            </div>
+            <div className="range-controls">
+              <label className="range-row" htmlFor="minRent">
+                <span>Minimum</span>
+                <input
+                  id="minRent"
+                  type="range"
+                  min="500"
+                  max="3000"
+                  step="50"
+                  value={formData.minRent}
+                  onChange={(event) =>
+                    onRentChange("minRent", event.target.value)
+                  }
+                />
+                <output htmlFor="minRent">${formData.minRent}</output>
+              </label>
+              <label className="range-row" htmlFor="maxRent">
+                <span>Maximum</span>
+                <input
+                  id="maxRent"
+                  type="range"
+                  min="500"
+                  max="3000"
+                  step="50"
+                  value={formData.maxRent}
+                  onChange={(event) =>
+                    onRentChange("maxRent", event.target.value)
+                  }
+                  aria-invalid={validationErrors.maxRent ? "true" : "false"}
+                  aria-describedby="max-rent-message"
+                />
+                <output htmlFor="maxRent">${formData.maxRent}</output>
+              </label>
+            </div>
+            <div className="field-message-slot" id="max-rent-message">
+              {validationErrors.maxRent && (
+                <p className="validation-message">
+                  {validationErrors.maxRent}
                 </p>
-                {preference.notes && <small>{preference.notes}</small>}
-              </article>
-            ))}
-          </div>
-        </section>
-      )}
+              )}
+            </div>
+          </fieldset>
 
-      {isLoadingRecentSearches && (
-        <p className="helper info" role="status">
-          Loading recent searches…
-        </p>
-      )}
-
-      {!isLoadingRecentSearches && recentSearches.length > 0 && (
-        <section className="saved-list" aria-label="Recent searches">
-          <h3>Recent Searches</h3>
-          <div className="saved-grid">
-            {recentSearches.map((search) => (
-              <article key={search._id} className="saved-item">
-                <strong>{search.campus || "No campus selected"}</strong>
-                <span>{formatDate(search.updatedAt || search.createdAt)}</span>
-                <p>
-                  {search.housingType || "All types"}
-                  {(search.minRent || search.maxRent) &&
-                    ` · $${search.minRent ?? "0"}-$${search.maxRent ?? "∞"}`}
-                  {search.maxCommute && ` · ${search.maxCommute} min`}
+          <fieldset className="form-section">
+            <legend>Commute and safety</legend>
+            <p className="form-section-helper">
+              Balance travel time with your preferred neighbourhood safety level.
+            </p>
+            <div className="form-grid decision-grid">
+              <div className="range-section compact">
+                <div className="range-heading">
+                  <label htmlFor="maxCommute">Maximum TTC commute</label>
+                  <output htmlFor="maxCommute">
+                    {formData.maxCommute} min
+                  </output>
+                </div>
+                <p className={formData.campus ? "helper good" : "helper warning"}>
+                  {formData.campus
+                    ? `Measured to ${formData.campus}`
+                    : "Select a campus to set the destination."}
                 </p>
-              </article>
-            ))}
+                <input
+                  id="maxCommute"
+                  type="range"
+                  min="10"
+                  max="60"
+                  step="5"
+                  value={formData.maxCommute}
+                  onChange={(event) =>
+                    onFieldChange("maxCommute", Number(event.target.value))
+                  }
+                />
+                <div className="range-scale" aria-hidden="true">
+                  <span>10 min</span>
+                  <span>60 min</span>
+                </div>
+              </div>
+
+              <fieldset className="safety-fieldset">
+                <legend>Minimum safety level</legend>
+                <p>Uses historical neighbourhood crime data.</p>
+                <div className="segmented-control">
+                  {safetyLevels.map((level) => (
+                    <button
+                      key={level}
+                      type="button"
+                      className={formData.safetyLevel === level ? "selected" : ""}
+                      aria-pressed={formData.safetyLevel === level}
+                      onClick={() => onFieldChange("safetyLevel", level)}
+                    >
+                      {level}
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
+            </div>
+          </fieldset>
+
+          <fieldset className="form-section notes-section">
+            <legend>Notes</legend>
+            <label className="notes-field" htmlFor="search-notes">
+              <span>Optional details</span>
+              <textarea
+                id="search-notes"
+                rows="3"
+                value={formData.notes}
+                placeholder="For example: furnished room or quiet neighbourhood"
+                onChange={(event) => onFieldChange("notes", event.target.value)}
+              />
+              <small className="field-helper">
+                Add anything you want to remember while reviewing your results.
+              </small>
+            </label>
+          </fieldset>
+
+          <div className="search-action-area">
+            {status.message && (
+              <StatusMessage type={status.type || "info"}>
+                {status.message}
+              </StatusMessage>
+            )}
+
+            {isSearchingListings && (
+              <StatusMessage type="loading">
+                Searching for matching listings…
+              </StatusMessage>
+            )}
+
+            <button
+              className="button button-primary submit-button"
+              type="submit"
+              disabled={isSubmittingSearch}
+            >
+              {isSearchingListings
+                ? "Finding housing…"
+                : isSavingPreference
+                  ? "Saving criteria…"
+                  : "Find Housing"}
+            </button>
           </div>
-        </section>
-      )}
-    </section>
+        </form>
+      </section>
+
+      <RecentSearches
+        searches={recentSearches}
+        isLoading={isLoadingRecentSearches}
+      />
+    </div>
   );
 }
 

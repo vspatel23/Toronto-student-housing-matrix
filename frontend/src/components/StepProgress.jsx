@@ -1,8 +1,8 @@
 const stepConfig = [
-  { key: "search", number: 1, label: "⌕ Search" },
-  { key: "results", number: 2, label: "☷ Browse Results" },
-  { key: "details", number: 3, label: "▤ View Details" },
-  { key: "compare", number: 4, label: "⌘ Compare" },
+  { key: "search", number: 1, label: "Search" },
+  { key: "results", number: 2, label: "Browse Results" },
+  { key: "details", number: 3, label: "View Details" },
+  { key: "compare", number: 4, label: "Compare" },
 ];
 
 const activeIndexByStep = {
@@ -17,19 +17,21 @@ function StepProgress({ currentStep = "search" }) {
 
   return (
     <nav className="step-nav" aria-label="Search progress">
-      {stepConfig.map((step, index) => (
-        <span key={step.number}>
-          {index > 0 && <span className="step-line"></span>}
-          <div
-            className={`step${index === activeIndex ? " active" : ""}${
-              index < activeIndex ? " completed" : ""
-            }`}
-          >
-            <span className="step-number">{step.number}</span>
-            <span className="step-label">{step.label}</span>
-          </div>
-        </span>
-      ))}
+      <ol className="step-list">
+        {stepConfig.map((step, index) => (
+          <li key={step.number}>
+            <div
+              className={`step${index === activeIndex ? " active" : ""}${
+                index < activeIndex ? " completed" : ""
+              }`}
+              aria-current={index === activeIndex ? "step" : undefined}
+            >
+              <span className="step-number">{step.number}</span>
+              <span className="step-label">{step.label}</span>
+            </div>
+          </li>
+        ))}
+      </ol>
     </nav>
   );
 }

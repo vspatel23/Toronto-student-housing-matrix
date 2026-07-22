@@ -119,7 +119,7 @@ const getRecommendationReasons = (listing, campus) => {
     );
   }
 
-  return reasons.slice(0, 4);
+  return reasons.slice(0, 3);
 };
 
 function RecommendationSummary({ listings, campus, valueScoreWeights }) {
@@ -147,29 +147,25 @@ function RecommendationSummary({ listings, campus, valueScoreWeights }) {
       aria-labelledby="recommendation-title"
     >
       <div className="recommendation-summary-header">
-        <div>
-          <h3
-            id="recommendation-title"
-            className="recommendation-summary-eyebrow"
-          >
-            Recommended Match
-          </h3>
-          <p className="recommendation-summary-title">
-            {title}
-          </p>
+        <div className="recommendation-heading-copy">
+          <span className="recommendation-summary-eyebrow">
+            Recommendation
+          </span>
+          <h2 id="recommendation-title">Recommended Match</h2>
+          <p className="recommendation-summary-title">{title}</p>
         </div>
         <span className="recommendation-score-pill">
           Value Score {valueScore}/100
         </span>
       </div>
 
-      <p className="recommendation-summary-copy">
-        {title} looks like your strongest match based on the current results,
-        with a Value Score of {valueScore}/100.
-      </p>
-
-      <div>
-        <strong>Why this stands out:</strong>
+      <div className="recommendation-summary-body">
+        <p className="recommendation-summary-copy">
+          Highest-ranked option using your current Value Score priorities.
+        </p>
+        <strong className="recommendation-reasons-label">
+          Why it stands out
+        </strong>
         <ul className="recommendation-reasons">
           {reasons.map((reason) => (
             <li key={reason}>{reason}</li>

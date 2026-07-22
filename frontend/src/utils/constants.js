@@ -43,25 +43,25 @@ export const defaultFormData = {
 
 export const helpCards = [
   {
-    icon: "◷",
+    icon: "commute",
     title: "TTC Commute Times",
     text: "Estimated transit commute to your selected campus",
     tone: "blue",
   },
   {
-    icon: "⌂",
+    icon: "safety",
     title: "Safety Data",
     text: "Neighbourhood crime statistics as relative safety indicators",
     tone: "green",
   },
   {
-    icon: "☷",
+    icon: "browse",
     title: "Browse Results",
     text: "Responsive listing cards that summarize the key housing details",
     tone: "purple",
   },
   {
-    icon: "⌖",
+    icon: "details",
     title: "Listing Details",
     text: "Open a listing to review rent, safety, commute, and amenities",
     tone: "orange",

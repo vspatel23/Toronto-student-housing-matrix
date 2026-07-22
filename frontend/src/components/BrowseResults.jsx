@@ -6,19 +6,15 @@ import {
   housingTypes,
 } from "../utils/constants";
 import { getRecommendationBadgesByListingId } from "../utils/recommendationBadges";
-import ListingBadges from "./ListingBadges";
+import ListingCard from "./ListingCard";
 import ListingsMap from "./ListingsMap";
 import RecommendationSummary from "./RecommendationSummary";
 import {
   DATA_UNAVAILABLE,
-  formatCommute,
-  formatFurnishedStatus,
-  formatRent,
   getAmenities,
   getCommuteMinutes,
   getListingId,
   getListingTitle,
-  getLocationLabel,
   getPropertyType,
   getSafetyLevel,
   getWeightedValueScore,
@@ -103,7 +99,12 @@ const getSortableTitle = (listing) => {
   return title === DATA_UNAVAILABLE ? "" : title;
 };
 
-const compareListingsByWeightedScore = (firstListing, secondListing, campus, weights) => {
+const compareListingsByWeightedScore = (
+  firstListing,
+  secondListing,
+  campus,
+  weights,
+) => {
   const scoreDifference =
     getWeightedValueScore(secondListing, campus, weights) -
     getWeightedValueScore(firstListing, campus, weights);
@@ -145,33 +146,44 @@ function ValueScoreWeightControls({ weights, onWeightChange, onResetWeights }) {
     >
       <div className="weight-controls-header">
         <div>
-          <h4 id="weight-controls-title">Value Score Priorities</h4>
+          <span className="filter-section-kicker">Ranking priorities</span>
+          <h3 id="weight-controls-title">Value Score Priorities</h3>
           <p>
-            Adjust how much each factor affects the score and ranking. We
-            normalize the weights automatically.
+            Higher percentages give a factor more influence on ranking.
           </p>
         </div>
-        <button
-          type="button"
-          className="reset-weights-button"
-          onClick={onResetWeights}
-        >
-          Reset weights
-        </button>
+        <div className="weight-summary-actions">
+          <div className="weight-total" aria-live="polite">
+            <span>Current total</span>
+            <strong>{rawTotal}%</strong>
+            {showEffectiveWeights && <small>Normalized to 100%</small>}
+          </div>
+          <button
+            type="button"
+            className="button button-secondary button-small reset-weights-button"
+            onClick={onResetWeights}
+          >
+            Reset priorities
+          </button>
+        </div>
       </div>
 
       <div className="weight-control-list">
         {valueScoreFactors.map((factor) => {
           const displayWeight = getWeightDisplayValue(weights, factor.key);
           const effectiveWeight = Math.round(normalizedWeights[factor.key]);
+          const sliderId = `value-score-${factor.key}`;
 
           return (
             <label key={factor.key} className="weight-control">
               <span className="weight-control-label">
                 <span>{factor.label}</span>
-                <span className="weight-control-value">{displayWeight}%</span>
+                <output className="weight-control-value" htmlFor={sliderId}>
+                  {displayWeight}%
+                </output>
               </span>
               <input
+                id={sliderId}
                 className="weight-slider"
                 type="range"
                 min="0"
@@ -194,8 +206,9 @@ function ValueScoreWeightControls({ weights, onWeightChange, onResetWeights }) {
       </div>
 
       <p className="weight-helper-text">
-        Current total: {rawTotal}%. Scores use normalized weights so ranking
-        stays consistent.
+        {showEffectiveWeights
+          ? "Effective percentages show how the current total is normalized for scoring."
+          : "Priorities total 100%, so the selected and effective percentages match."}
       </p>
     </section>
   );
@@ -212,126 +225,152 @@ function ResultsFilters({
 
   return (
     <section className="results-filter-panel" aria-labelledby="filters-title">
-      <div>
-        <h3 id="filters-title">Refine Results</h3>
-        <p>Adjust the displayed listings without changing your saved search.</p>
-      </div>
+      <header className="filter-panel-header">
+        <div>
+          <p className="section-eyebrow">Display controls</p>
+          <h2 id="filters-title">Refine Results</h2>
+          <p>Adjust the displayed listings without changing your search.</p>
+        </div>
+        <div
+          className="sort-summary"
+          aria-label="Results sorted by Value Score, highest first"
+        >
+          <span>Sorted by</span>
+          <strong>Value Score</strong>
+          <small>Highest first</small>
+        </div>
+      </header>
 
-      <div className="results-filter-grid">
-        <label>
-          <span>Minimum monthly rent</span>
-          <input
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={filters.minRent}
-            onChange={(event) => onChange("minRent", event.target.value)}
-            placeholder="No minimum"
-          />
-        </label>
+      <section className="filter-section" aria-labelledby="basic-filters-title">
+        <div className="filter-section-heading">
+          <h3 id="basic-filters-title">Basic filters</h3>
+          <p>Refine rent, housing type, safety, and commute.</p>
+        </div>
+        <div className="results-filter-grid basic-filter-grid">
+          <label>
+            <span>Minimum rent</span>
+            <input
+              type="number"
+              min="0"
+              inputMode="numeric"
+              value={filters.minRent}
+              onChange={(event) => onChange("minRent", event.target.value)}
+              placeholder="No minimum"
+            />
+          </label>
 
-        <label>
-          <span>Maximum monthly rent</span>
-          <input
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={filters.maxRent}
-            onChange={(event) => onChange("maxRent", event.target.value)}
-            placeholder="No maximum"
-          />
-        </label>
+          <label>
+            <span>Maximum rent</span>
+            <input
+              type="number"
+              min="0"
+              inputMode="numeric"
+              value={filters.maxRent}
+              onChange={(event) => onChange("maxRent", event.target.value)}
+              placeholder="No maximum"
+            />
+          </label>
 
-        <label>
-          <span>Housing type</span>
-          <select
-            value={filters.housingType}
-            onChange={(event) => onChange("housingType", event.target.value)}
-          >
-            {housingTypes.map((housingType) => (
-              <option key={housingType} value={housingType}>
-                {housingType}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label>
+            <span>Housing type</span>
+            <select
+              value={filters.housingType}
+              onChange={(event) => onChange("housingType", event.target.value)}
+            >
+              {housingTypes.map((housingType) => (
+                <option key={housingType} value={housingType}>
+                  {housingType}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label>
-          <span>Safety level</span>
-          <select
-            value={filters.safetyLevel}
-            onChange={(event) => onChange("safetyLevel", event.target.value)}
-          >
-            {safetyOptions.map((safetyLevel) => (
-              <option key={safetyLevel} value={safetyLevel}>
-                {safetyLevel}
-              </option>
-            ))}
-          </select>
-        </label>
+          <label>
+            <span>Safety level</span>
+            <select
+              value={filters.safetyLevel}
+              onChange={(event) => onChange("safetyLevel", event.target.value)}
+            >
+              {safetyOptions.map((safetyLevel) => (
+                <option key={safetyLevel} value={safetyLevel}>
+                  {safetyLevel}
+                </option>
+              ))}
+            </select>
+          </label>
 
-        <label>
-          <span>Maximum commute</span>
-          <input
-            type="number"
-            min="0"
-            inputMode="numeric"
-            value={filters.maxCommute}
-            onChange={(event) => onChange("maxCommute", event.target.value)}
-            placeholder="Any"
-          />
-        </label>
+          <label>
+            <span>Maximum commute</span>
+            <input
+              type="number"
+              min="0"
+              inputMode="numeric"
+              value={filters.maxCommute}
+              onChange={(event) => onChange("maxCommute", event.target.value)}
+              placeholder="Any"
+            />
+          </label>
+        </div>
+      </section>
 
-        <label>
-          <span>Furnished</span>
-          <select
-            value={filters.furnished || "Any"}
-            onChange={(event) => onChange("furnished", event.target.value)}
-          >
-            {furnishedFilterOptions.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <section
+        className="filter-section advanced-filter-section"
+        aria-labelledby="amenity-filters-title"
+      >
+        <div className="filter-section-heading">
+          <h3 id="amenity-filters-title">Furnishing and amenities</h3>
+          <p>Narrow results by setup and included features.</p>
+        </div>
+        <div className="furnishing-amenities-layout">
+          <label className="furnishing-filter">
+            <span>Furnishing</span>
+            <select
+              value={filters.furnished || "Any"}
+              onChange={(event) => onChange("furnished", event.target.value)}
+            >
+              {furnishedFilterOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
 
-      <div className="advanced-filter-section">
-        <fieldset className="amenity-filter-group">
-          <legend className="filter-group-label">Amenities</legend>
-          {selectedAmenities.length > 0 && (
-            <p className="selected-filter-count">
-              {selectedAmenities.length} amenity filter
-              {selectedAmenities.length === 1 ? "" : "s"} selected
-            </p>
-          )}
-          <div className="amenity-filter-options">
-            {advancedAmenityFilters.map((amenity) => {
-              const isSelected = selectedAmenities.includes(amenity);
-              const nextAmenities = isSelected
-                ? selectedAmenities.filter((item) => item !== amenity)
-                : [...selectedAmenities, amenity];
+          <fieldset className="amenity-filter-group">
+            <legend className="filter-group-label">Amenities</legend>
+            {selectedAmenities.length > 0 && (
+              <p className="selected-filter-count">
+                {selectedAmenities.length} amenity filter
+                {selectedAmenities.length === 1 ? "" : "s"} selected
+              </p>
+            )}
+            <div className="amenity-filter-options">
+              {advancedAmenityFilters.map((amenity) => {
+                const isSelected = selectedAmenities.includes(amenity);
+                const nextAmenities = isSelected
+                  ? selectedAmenities.filter((item) => item !== amenity)
+                  : [...selectedAmenities, amenity];
 
-              return (
-                <label
-                  key={amenity}
-                  className={`amenity-filter-chip${
-                    isSelected ? " selected" : ""
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={isSelected}
-                    onChange={() => onChange("amenities", nextAmenities)}
-                  />
-                  <span>{amenity}</span>
-                </label>
-              );
-            })}
-          </div>
-        </fieldset>
-      </div>
+                return (
+                  <label
+                    key={amenity}
+                    className={`amenity-filter-chip${
+                      isSelected ? " selected" : ""
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      onChange={() => onChange("amenities", nextAmenities)}
+                    />
+                    <span>{amenity}</span>
+                  </label>
+                );
+              })}
+            </div>
+          </fieldset>
+        </div>
+      </section>
 
       <ValueScoreWeightControls
         weights={valueScoreWeights}
@@ -339,160 +378,6 @@ function ResultsFilters({
         onResetWeights={onResetWeights}
       />
     </section>
-  );
-}
-
-export function ListingCard({
-  listing,
-  campus,
-  badges = [],
-  onDetails,
-  isActive = false,
-  onSelect,
-  cardRef,
-  isSaved = false,
-  isSaving = false,
-  onToggleSave,
-  isCompared = false,
-  onCompareListing,
-  valueScoreWeights,
-}) {
-  const listingId = getListingId(listing);
-  const amenities = getAmenities(listing);
-  const safetyLevel = getSafetyLevel(listing);
-  const valueScore = getWeightedValueScore(listing, campus, valueScoreWeights);
-  const safetyClass =
-    safetyLevel === DATA_UNAVAILABLE
-      ? "unknown"
-      : safetyLevel.toLowerCase().replace(/\s+/g, "-");
-  const selectCard = () => {
-    if (listingId) {
-      onSelect?.(listingId);
-    }
-  };
-  const handleCardKeyDown = (event) => {
-    const isNestedButton = event.target?.closest?.("button");
-
-    if (isNestedButton) {
-      return;
-    }
-
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      selectCard();
-    }
-  };
-
-  return (
-    <article
-      ref={cardRef}
-      aria-current={isActive ? "true" : undefined}
-      aria-label={`${getListingTitle(listing)} listing card${
-        isActive ? ", selected" : ""
-      }`}
-      className={`listing-card${isActive ? " active" : ""}`}
-      onClick={selectCard}
-      onFocus={(event) => {
-        if (event.target === event.currentTarget) {
-          selectCard();
-        }
-      }}
-      onKeyDown={handleCardKeyDown}
-      tabIndex="0"
-    >
-      <div className="listing-card-heading">
-        <h3>{getListingTitle(listing)}</h3>
-        <span className="score-badge">{valueScore}/100</span>
-      </div>
-
-      <ListingBadges badges={badges} />
-
-      <div className="listing-meta-row">
-        {getPropertyType(listing) !== DATA_UNAVAILABLE && (
-          <span className="type-badge">{getPropertyType(listing)}</span>
-        )}
-        <span className={`safety-badge ${safetyClass}`}>{safetyLevel}</span>
-      </div>
-
-      <p className="listing-rent">
-        {formatRent(listing?.monthlyRent ?? listing?.rent)}
-      </p>
-      <p className="listing-location">{getLocationLabel(listing)}</p>
-
-      <dl className="listing-facts">
-        <div>
-          <dt>Neighbourhood</dt>
-          <dd>{getLocationLabel(listing)}</dd>
-        </div>
-        <div>
-          <dt>Estimated commute</dt>
-          <dd>{formatCommute(listing, campus)}</dd>
-        </div>
-        <div>
-          <dt>Furnished</dt>
-          <dd>{formatFurnishedStatus(listing?.furnished)}</dd>
-        </div>
-      </dl>
-
-      {amenities.length > 0 && (
-        <ul className="chip-list" aria-label="Amenities">
-          {amenities.slice(0, 4).map((amenity) => (
-            <li key={amenity}>{amenity}</li>
-          ))}
-        </ul>
-      )}
-
-      {hasValue(listing?.description) && (
-        <p className="listing-description">{listing.description}</p>
-      )}
-
-      <div className="listing-card-actions">
-        {onCompareListing && (
-          <button
-            type="button"
-            className={`secondary-button compare-toggle-button${
-              isCompared ? " selected" : ""
-            }`}
-            disabled={!listingId}
-            aria-pressed={isCompared}
-            onClick={(event) => {
-              event.stopPropagation();
-              onCompareListing(listingId);
-            }}
-          >
-            Compare
-          </button>
-        )}
-        <button
-          type="button"
-          className="details-button"
-          disabled={!listingId}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDetails(listingId);
-          }}
-        >
-          Details
-        </button>
-        {onToggleSave && (
-          <button
-            type="button"
-            className={`save-toggle-button${isSaved ? " saved" : ""}`}
-            disabled={!listingId || isSaving}
-            aria-pressed={isSaved}
-            aria-label={
-              isSaved ? "Remove listing from saved listings" : "Save listing"
-            }
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleSave(listingId);
-            }}
-          >
-            {isSaved ? "★ Saved" : "☆ Save"}
-          </button>
-        )}
-      </div>
-    </article>
   );
 }
 
@@ -647,6 +532,13 @@ function BrowseResults({
   };
   const compareCount = compareListingIds.length;
   const hasCompareStatus = hasValue(compareStatus.message);
+  const resultCountLabel = isLoading
+    ? "Loading listings"
+    : errorMessage
+      ? "Results unavailable"
+      : `${rankedListings.length} listing${
+          rankedListings.length === 1 ? "" : "s"
+        }`;
   const handleOpenCompare = () => {
     onClearCompareStatus?.();
     onOpenCompare?.();
@@ -654,11 +546,50 @@ function BrowseResults({
 
   return (
     <section className="browse-page" aria-labelledby="results-title">
-      <div className="active-search-bar">
-        <div className="active-search-content">
-          <strong>Active Search</strong>
+      <header className="results-page-header">
+        <div className="results-heading-row">
+          <div className="results-heading-copy">
+            <p className="section-eyebrow">Housing search</p>
+            <div className="results-title-group">
+              <h1 id="results-title">Browse Results</h1>
+              <span className="result-count-pill" aria-live="polite">
+                {resultCountLabel}
+              </span>
+            </div>
+            <p>Review matches, adjust priorities, and compare your options.</p>
+          </div>
+
+          <div className="results-header-actions">
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={onEditSearch}
+            >
+              Modify Search
+            </button>
+            <div
+              className="compare-header-control"
+              aria-label="Compare selected listings"
+            >
+              <span className="compare-selection-count" aria-live="polite">
+                <strong>{compareCount}</strong> of {maxCompareListings} selected
+              </span>
+              <button
+                type="button"
+                className="button button-primary"
+                disabled={compareCount === 0 || !onOpenCompare}
+                onClick={handleOpenCompare}
+              >
+                Compare selected
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div className="results-search-summary">
+          <strong>Search summary</strong>
           {searchChips.length > 0 ? (
-            <div className="search-chip-list" aria-label="Active search criteria">
+            <div className="search-chip-list" aria-label="Search criteria">
               {searchChips.map((chip) => (
                 <span key={chip.label} className="search-chip">
                   {chip.label}
@@ -669,52 +600,7 @@ function BrowseResults({
             <span className="muted-text">No search criteria selected</span>
           )}
         </div>
-        <button type="button" className="link-button strong" onClick={onEditSearch}>
-          Edit Search
-        </button>
-      </div>
-
-      <ResultsFilters
-        filters={filters}
-        onChange={onFilterChange}
-        valueScoreWeights={valueScoreWeights}
-        onWeightChange={onWeightChange}
-        onResetWeights={onResetWeights}
-      />
-
-      {!isLoading && !errorMessage && rankedListings.length > 0 && (
-        <RecommendationSummary
-          listings={rankedListings}
-          campus={search?.campus}
-          valueScoreWeights={valueScoreWeights}
-        />
-      )}
-
-      <div className="results-title-row">
-        <div>
-          <h2 id="results-title">Housing Results</h2>
-          <p>
-            {rankedListings.length} listing
-            {rankedListings.length === 1 ? "" : "s"} found with your current
-            filters
-          </p>
-        </div>
-        <div className="compare-toolbar" aria-label="Compare selected listings">
-          <div className="compare-count">
-            <span>Compare</span>
-            <strong>
-              {compareCount}/{maxCompareListings} selected
-            </strong>
-          </div>
-          <button
-            type="button"
-            className="secondary-button"
-            onClick={handleOpenCompare}
-          >
-            Open Compare
-          </button>
-        </div>
-      </div>
+      </header>
 
       {hasCompareStatus && (
         <p
@@ -725,94 +611,130 @@ function BrowseResults({
         </p>
       )}
 
-      {isLoading && (
-        <div className="state-panel loading-state" role="status">
-          <span className="spinner" aria-hidden="true"></span>
-          <div>
-            <h3>Finding housing matches</h3>
-            <p>Checking listings that fit your rent, commute, and safety needs.</p>
-          </div>
-        </div>
-      )}
-
-      {!isLoading && errorMessage && (
-        <div className="state-panel error" role="alert">
-          <h3>Listings could not be loaded</h3>
-          <p>{errorMessage}</p>
-          <div className="state-actions">
-            <button type="button" className="details-button" onClick={onRetry}>
-              Retry
-            </button>
-            <button type="button" className="secondary-button" onClick={onEditSearch}>
-              Edit Search
-            </button>
-          </div>
-        </div>
-      )}
-
-      {!isLoading && !errorMessage && rankedListings.length === 0 && (
-        <div className="state-panel empty-state">
-          <h3>No listings match these filters</h3>
-          <p>
-            Try removing an amenity or widening the rent, commute, or housing
-            type filters to see more options.
-          </p>
-          <button type="button" className="secondary-button" onClick={onEditSearch}>
-            Edit Search
-          </button>
-        </div>
-      )}
-
       {!isLoading && !errorMessage && rankedListings.length > 0 && (
-        <div className="results-map-layout">
-          <div className="results-list-column">
-            <div className="listing-grid">
-              {rankedListings.map((listing) => {
-                const listingId = getListingId(listing);
+        <RecommendationSummary
+          listings={rankedListings}
+          campus={search?.campus}
+          valueScoreWeights={valueScoreWeights}
+        />
+      )}
 
-                return (
-                  <ListingCard
-                    key={listingId}
-                    cardRef={(element) => {
-                      if (!listingId) {
-                        return;
-                      }
+      <ResultsFilters
+        filters={filters}
+        onChange={onFilterChange}
+        valueScoreWeights={valueScoreWeights}
+        onWeightChange={onWeightChange}
+        onResetWeights={onResetWeights}
+      />
 
-                      if (element) {
-                        cardRefs.current.set(listingId, element);
-                      } else {
-                        cardRefs.current.delete(listingId);
-                      }
-                    }}
-                    listing={listing}
-                    campus={search?.campus}
-                    badges={badgesByListingId[listingId] || []}
-                    onDetails={onDetails}
-                    isActive={listingId === activeListingId}
-                    onSelect={handleSelectListing}
-                    isSaved={savedListingIds?.has(listingId)}
-                    isSaving={savingListingIds?.has(listingId)}
-                    onToggleSave={onToggleSave}
-                    isCompared={compareListingIds.includes(listingId)}
-                    onCompareListing={onCompareListing}
-                    valueScoreWeights={valueScoreWeights}
-                  />
-                );
-              })}
+      <section className="results-content" aria-labelledby="listings-title">
+        <div className="results-content-heading">
+          <div>
+            <p className="section-eyebrow">Results and map</p>
+            <h2 id="listings-title">Listings and locations</h2>
+          </div>
+          <p>Cards and map markers stay linked as you review each option.</p>
+        </div>
+
+        {isLoading && (
+          <div className="state-panel loading-state" role="status">
+            <span className="spinner" aria-hidden="true"></span>
+            <div>
+              <h3>Finding housing matches</h3>
+              <p>
+                Checking listings that fit your rent, commute, and safety needs.
+              </p>
             </div>
           </div>
+        )}
 
-          <ListingsMap
-            activeListingId={activeListingId}
-            listings={rankedListings}
-            onOpenDetails={onDetails}
-            onSelectListing={(listingId) =>
-              handleSelectListing(listingId, { scrollToCard: true })
-            }
-            selectedCampus={selectedCampus}
-          />
-        </div>
-      )}
+        {!isLoading && errorMessage && (
+          <div className="state-panel error error-state" role="alert">
+            <h3>Listings could not be loaded</h3>
+            <p>{errorMessage}</p>
+            <div className="state-actions">
+              <button type="button" className="details-button" onClick={onRetry}>
+                Retry
+              </button>
+              <button
+                type="button"
+                className="secondary-button"
+                onClick={onEditSearch}
+              >
+                Modify Search
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!isLoading && !errorMessage && rankedListings.length === 0 && (
+          <div className="state-panel empty-state">
+            <h3>No listings match these filters</h3>
+            <p>
+              Try removing an amenity or widening the rent, commute, or housing
+              type filters to see more options.
+            </p>
+            <button
+              type="button"
+              className="secondary-button"
+              onClick={onEditSearch}
+            >
+              Modify Search
+            </button>
+          </div>
+        )}
+
+        {!isLoading && !errorMessage && rankedListings.length > 0 && (
+          <div className="results-map-layout">
+            <div className="results-list-column">
+              <div className="listing-grid">
+                {rankedListings.map((listing) => {
+                  const listingId = getListingId(listing);
+
+                  return (
+                    <ListingCard
+                      key={listingId}
+                      cardRef={(element) => {
+                        if (!listingId) {
+                          return;
+                        }
+
+                        if (element) {
+                          cardRefs.current.set(listingId, element);
+                        } else {
+                          cardRefs.current.delete(listingId);
+                        }
+                      }}
+                      listing={listing}
+                      campus={search?.campus}
+                      badges={badgesByListingId[listingId] || []}
+                      onDetails={onDetails}
+                      isActive={listingId === activeListingId}
+                      onSelect={handleSelectListing}
+                      isSaved={savedListingIds?.has(listingId)}
+                      isSaving={savingListingIds?.has(listingId)}
+                      onToggleSave={onToggleSave}
+                      isCompared={compareListingIds.includes(listingId)}
+                      onCompareListing={onCompareListing}
+                      valueScoreWeights={valueScoreWeights}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+
+            <ListingsMap
+              activeListingId={activeListingId}
+              listings={rankedListings}
+              onOpenDetails={onDetails}
+              onSelectListing={(listingId) =>
+                handleSelectListing(listingId, { scrollToCard: true })
+              }
+              selectedCampus={selectedCampus}
+            />
+          </div>
+        )}
+      </section>
     </section>
   );
 }

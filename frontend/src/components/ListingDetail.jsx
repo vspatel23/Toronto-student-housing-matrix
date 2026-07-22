@@ -1,3 +1,4 @@
+import ListingBadges from "./ListingBadges";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -13,11 +14,24 @@ import {
   getValueScore,
   getWeightedValueScore,
   getValueScoreBreakdown,
+  normalizeValueScoreWeights,
 } from "../utils/listingFormatters";
 
-function DetailRow({ label, children }) {
+const SCORE_FACTORS = [
+  { key: "affordability", label: "Affordability" },
+  { key: "commute", label: "Commute" },
+  { key: "safety", label: "Safety" },
+  { key: "amenities", label: "Amenities" },
+];
+
+const getSafetyClass = (safetyLevel) =>
+  safetyLevel === DATA_UNAVAILABLE
+    ? "unknown"
+    : safetyLevel.toLowerCase().replace(/\s+/g, "-");
+
+function DetailStat({ label, children, featured = false }) {
   return (
-    <div className="detail-row">
+    <div className={`detail-stat${featured ? " featured" : ""}`}>
       <dt>{label}</dt>
       <dd>{children}</dd>
     </div>
@@ -27,6 +41,7 @@ function DetailRow({ label, children }) {
 function ListingDetail({
   listing,
   campus,
+  badges = [],
   isLoading,
   errorMessage,
   onBack,
@@ -35,31 +50,44 @@ function ListingDetail({
   isSaved = false,
   isSaving = false,
   onToggleSave,
+  isCompared = false,
+  compareCount = 0,
+  maxCompareListings = 3,
+  onCompareListing,
   valueScoreWeights,
 }) {
   const amenities = getAmenities(listing);
+  const description = getDescription(listing);
   const safetyLevel = getSafetyLevel(listing);
+  const safetyClass = getSafetyClass(safetyLevel);
   const valueScore = valueScoreWeights
     ? getWeightedValueScore(listing, campus, valueScoreWeights)
     : getValueScore(listing, campus);
   const scoreBreakdown = getValueScoreBreakdown(listing, campus);
+  const effectiveWeights = normalizeValueScoreWeights(valueScoreWeights);
   const listingId = getListingId(listing);
-  const safetyClass =
-    safetyLevel === DATA_UNAVAILABLE
-      ? "unknown"
-      : safetyLevel.toLowerCase().replace(/\s+/g, "-");
+  const listingTitle = getListingTitle(listing);
+  const isCompareFull =
+    !isCompared && compareCount >= maxCompareListings;
+  const compareButtonLabel = isCompared
+    ? "View Comparison"
+    : isCompareFull
+      ? "View Full Comparison"
+      : "Add to Compare";
 
   return (
     <section className="detail-page" aria-labelledby="detail-title">
-      <button type="button" className="back-button" onClick={onBack}>
-        {backLabel}
-      </button>
+      <nav className="detail-navigation" aria-label="Listing details navigation">
+        <button type="button" className="back-button" onClick={onBack}>
+          {backLabel}
+        </button>
+      </nav>
 
       {isLoading && (
         <div className="state-panel loading-state" role="status">
           <span className="spinner" aria-hidden="true"></span>
           <div>
-            <h2 id="detail-title">Loading listing details</h2>
+            <h1 id="detail-title">Loading listing details</h1>
             <p>Getting rent, commute, safety, and amenities for this listing.</p>
           </div>
         </div>
@@ -67,123 +95,199 @@ function ListingDetail({
 
       {!isLoading && errorMessage && (
         <div className="state-panel error" role="alert">
-          <h2 id="detail-title">Listing details unavailable</h2>
+          <h1 id="detail-title">Listing details unavailable</h1>
           <p>{errorMessage}</p>
           <div className="state-actions">
-            <button type="button" className="details-button" onClick={onRetry}>
-              Retry
-            </button>
+            {onRetry && (
+              <button type="button" className="details-button" onClick={onRetry}>
+                Retry
+              </button>
+            )}
             <button type="button" className="secondary-button" onClick={onBack}>
-              Back to Results
+              {backLabel}
             </button>
           </div>
         </div>
       )}
 
+      {!isLoading && !errorMessage && !listing && (
+        <div className="state-panel empty-state">
+          <h1 id="detail-title">Listing not found</h1>
+          <p>This listing is no longer available in the current results.</p>
+          <button type="button" className="secondary-button" onClick={onBack}>
+            {backLabel}
+          </button>
+        </div>
+      )}
+
       {!isLoading && !errorMessage && listing && (
-        <article className="detail-card">
-          <div className="detail-hero">
-            <div>
-              <div className="listing-meta-row">
-                <span className="type-badge large">{getPropertyType(listing)}</span>
-                <span className={`safety-badge ${safetyClass}`}>{safetyLevel}</span>
+        <article className="detail-content">
+          <header className="detail-overview">
+            <div className="detail-identity">
+              <ListingBadges badges={badges} />
+              <p className="section-eyebrow">Listing details</p>
+              <h1 id="detail-title">{listingTitle}</h1>
+              <div className="detail-identity-meta">
+                <span>{getLocationLabel(listing)}</span>
+                <span className="type-badge">{getPropertyType(listing)}</span>
               </div>
-              <h2 id="detail-title">{getListingTitle(listing)}</h2>
-              <p>{getLocationLabel(listing)}</p>
-              <p className="detail-rent">
-                {formatRent(listing.monthlyRent ?? listing.rent)}
-              </p>
             </div>
-            <div className="detail-hero-actions">
-              <div className="value-score-card" aria-label="Value score">
-                <span>Value Score</span>
-                <strong>{valueScore}</strong>
-                <small>out of 100</small>
-              </div>
+
+            <div className="detail-actions" aria-label="Listing actions">
               {onToggleSave && (
                 <button
                   type="button"
                   className={`save-toggle-button${isSaved ? " saved" : ""}`}
                   disabled={!listingId || isSaving}
                   aria-pressed={isSaved}
-                  aria-label={
-                    isSaved
-                      ? "Remove listing from saved listings"
-                      : "Save listing"
-                  }
                   onClick={() => onToggleSave(listingId)}
                 >
-                  {isSaved ? "★ Saved" : "☆ Save Listing"}
+                  {isSaving ? "Updating..." : isSaved ? "Saved" : "Save Listing"}
                 </button>
               )}
-            </div>
-          </div>
-
-          <dl className="quick-stats">
-            <DetailRow label="Monthly rent">
-              {formatRent(listing.monthlyRent ?? listing.rent)}
-            </DetailRow>
-            <DetailRow label="Estimated commute">
-              {formatCommute(listing, campus)}
-              {campus && (
-                <small className="commute-campus-label">to {campus}</small>
+              {onCompareListing && (
+                <button
+                  type="button"
+                  className={`secondary-button compare-toggle-button${
+                    isCompared ? " selected" : ""
+                  }`}
+                  disabled={!listingId}
+                  aria-pressed={isCompared}
+                  onClick={() => onCompareListing(listingId)}
+                >
+                  {compareButtonLabel}
+                </button>
               )}
-            </DetailRow>
-            <DetailRow label="Safety level">
-              <span className={`safety-badge ${safetyClass}`}>{safetyLevel}</span>
-            </DetailRow>
-            <DetailRow label="Furnished status">
-              {formatFurnishedStatus(listing.furnished)}
-            </DetailRow>
-            <DetailRow label="Value score">
-              <span className={valueScore === DATA_UNAVAILABLE ? "unavailable-data" : ""}>
-                {valueScore}
+              {isCompared && (
+                <span className="detail-action-note" role="status">
+                  Selected for comparison
+                </span>
+              )}
+              {isCompareFull && (
+                <span className="detail-action-note" role="status">
+                  Comparison is full. Open it to remove a listing.
+                </span>
+              )}
+            </div>
+          </header>
+
+          <dl className="detail-quick-stats" aria-label="Listing quick statistics">
+            <DetailStat label="Monthly rent" featured>
+              {formatRent(listing.monthlyRent ?? listing.rent)}
+            </DetailStat>
+            <DetailStat label="Estimated commute">
+              {formatCommute(listing, campus)}
+              {campus && <small>to {campus}</small>}
+            </DetailStat>
+            <DetailStat label="Safety level">
+              <span className={`safety-badge ${safetyClass}`}>
+                {safetyLevel === DATA_UNAVAILABLE
+                  ? safetyLevel
+                  : `${safetyLevel} crime`}
               </span>
-            </DetailRow>
+            </DetailStat>
+            <DetailStat label="Furnishing">
+              {formatFurnishedStatus(listing.furnished)}
+            </DetailStat>
           </dl>
 
-          <section className="detail-section" aria-labelledby="amenities-title">
-            <h3 id="amenities-title">Amenities</h3>
-            {amenities.length > 0 ? (
-              <ul className="chip-list">
-                {amenities.map((amenity) => (
-                  <li key={amenity}>{amenity}</li>
-                ))}
-              </ul>
-            ) : (
-              <p>{DATA_UNAVAILABLE}</p>
-            )}
-          </section>
+          <div className="detail-decision-grid">
+            <div className="detail-main-column">
+              <section className="detail-section" aria-labelledby="description-title">
+                <h2 id="description-title">About this listing</h2>
+                <p className={description === DATA_UNAVAILABLE ? "unavailable-data" : ""}>
+                  {description === DATA_UNAVAILABLE
+                    ? "No description was provided for this listing."
+                    : description}
+                </p>
+              </section>
 
-          <section className="detail-section" aria-labelledby="commute-title">
-            <h3 id="commute-title">Estimated Commute</h3>
-            <p>
-              {campus
-                ? `This is the estimated TTC commute from this listing to ${campus}. `
-                : "Estimated TTC commute is matched to your selected campus when available. "}
-              Use it as a planning estimate and confirm the route before
-              signing a lease.
-            </p>
-          </section>
+              <section className="detail-section" aria-labelledby="amenities-title">
+                <div className="detail-section-heading">
+                  <h2 id="amenities-title">Amenities</h2>
+                  {amenities.length > 0 && (
+                    <span>{amenities.length} listed</span>
+                  )}
+                </div>
+                {amenities.length > 0 ? (
+                  <ul className="chip-list" aria-label="Listing amenities">
+                    {amenities.map((amenity) => (
+                      <li key={amenity}>{amenity}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="unavailable-data">
+                    No amenities were provided for this listing.
+                  </p>
+                )}
+              </section>
 
-          <section className="detail-section" aria-labelledby="score-title">
-            <h3 id="score-title">Score Breakdown</h3>
-            <div className="score-breakdown-grid">
-              <DetailRow label="Affordability score">
-                {scoreBreakdown.affordability}/100
-              </DetailRow>
-              <DetailRow label="Commute score">{scoreBreakdown.commute}/100</DetailRow>
-              <DetailRow label="Safety score">{scoreBreakdown.safety}/100</DetailRow>
-              <DetailRow label="Amenities score">
-                {scoreBreakdown.amenities}/100
-              </DetailRow>
+              <section className="detail-section" aria-labelledby="context-title">
+                <h2 id="context-title">Commute and safety context</h2>
+                <div className="detail-context-grid">
+                  <article>
+                    <h3>Campus commute</h3>
+                    <p>
+                      {campus
+                        ? `The TTC estimate is calculated to ${campus}. Confirm the route and service schedule before signing a lease.`
+                        : "Select a campus during search to match this listing with a TTC commute estimate."}
+                    </p>
+                  </article>
+                  <article>
+                    <h3>Neighbourhood safety</h3>
+                    <p>
+                      {safetyLevel === DATA_UNAVAILABLE
+                        ? "Neighbourhood safety data is not available for this listing. Other listing information remains usable."
+                        : `${safetyLevel} crime level is based on the neighbourhood safety data currently available.`}
+                    </p>
+                  </article>
+                </div>
+              </section>
             </div>
-          </section>
 
-          <section className="detail-section" aria-labelledby="description-title">
-            <h3 id="description-title">Description</h3>
-            <p>{getDescription(listing)}</p>
-          </section>
+            <aside className="detail-score-panel" aria-labelledby="score-title">
+              <p className="section-eyebrow">Current priorities</p>
+              <div className="detail-score-heading">
+                <div>
+                  <h2 id="score-title">Value Score</h2>
+                  <p>Overall score using your current factor priorities.</p>
+                </div>
+                <div
+                  className="detail-score-total"
+                  aria-label={`Value Score ${valueScore} out of 100`}
+                >
+                  <strong>{valueScore}</strong>
+                  <span>/100</span>
+                </div>
+              </div>
+
+              <ul className="detail-score-list" aria-label="Value Score breakdown">
+                {SCORE_FACTORS.map((factor) => {
+                  const score = scoreBreakdown[factor.key];
+                  const weight = Math.round(effectiveWeights[factor.key]);
+
+                  return (
+                    <li key={factor.key}>
+                      <div className="detail-score-label">
+                        <span>{factor.label}</span>
+                        <strong>{score}/100</strong>
+                      </div>
+                      <div className="detail-score-track" aria-hidden="true">
+                        <span style={{ width: `${score}%` }}></span>
+                      </div>
+                      <small>{weight}% of the overall score</small>
+                    </li>
+                  );
+                })}
+              </ul>
+
+              <p className="detail-score-note">
+                Factor scores use the existing rent, commute, safety, and
+                amenities data. Changing priorities changes their influence,
+                not the underlying data.
+              </p>
+            </aside>
+          </div>
         </article>
       )}
     </section>

@@ -39,7 +39,7 @@ const createListingIcon = (isActive = false) =>
 const createCampusIcon = () =>
   L.divIcon({
     className: "campus-map-marker",
-    html: '<span aria-hidden="true">▥</span>',
+    html: '<span aria-hidden="true">C</span>',
     iconAnchor: [18, 18],
     iconSize: [36, 36],
     popupAnchor: [0, -20],
@@ -193,6 +193,19 @@ function ListingsMap({
             {mappedListingCount} of {totalListings} listing
             {totalListings === 1 ? " is" : "s are"} shown on the map.
           </p>
+          <p className="results-map-helper">
+            Select a marker to highlight its listing card.
+          </p>
+        </div>
+        <div className="results-map-legend" aria-label="Map marker legend">
+          <span>
+            <i className="map-legend-marker listing" aria-hidden="true"></i>
+            Listing
+          </span>
+          <span>
+            <i className="map-legend-marker campus" aria-hidden="true">C</i>
+            Campus
+          </span>
         </div>
       </div>
 

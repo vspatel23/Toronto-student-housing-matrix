@@ -1,4 +1,5 @@
 import StatusMessage from "./StatusMessage";
+import BrandIdentity from "./BrandIdentity";
 
 function AuthForm({
   authMode,
@@ -13,10 +14,7 @@ function AuthForm({
     <main className="auth-page">
       <section className="auth-card" aria-labelledby="auth-title">
         <div className="auth-brand">
-          <div className="home-mark" aria-hidden="true">
-            ⌂
-          </div>
-          <span>Toronto Student Housing Matrix</span>
+          <BrandIdentity />
         </div>
 
         <div className="auth-heading">
@@ -25,19 +23,24 @@ function AuthForm({
           </h1>
           <p>
             {authMode === "register"
-              ? "Create an account to continue to the housing dashboard."
-              : "Log in to continue to the housing dashboard."}
+              ? "Create your account to compare housing options with confidence."
+              : "Welcome back. Log in to continue your housing search."}
           </p>
         </div>
 
-        <form className="auth-form" onSubmit={onSubmit}>
+        <form className="auth-form" onSubmit={onSubmit} noValidate>
           {authMode === "register" && (
-            <label>
+            <label htmlFor="auth-name">
               <span>Name</span>
               <input
+                id="auth-name"
                 type="text"
                 autoComplete="name"
+                required
                 value={authForm.name}
+                aria-describedby={
+                  authStatus.type === "error" ? "auth-status" : undefined
+                }
                 onChange={(event) =>
                   onFieldChange("name", event.target.value)
                 }
@@ -45,45 +48,72 @@ function AuthForm({
             </label>
           )}
 
-          <label>
+          <label htmlFor="auth-email">
             <span>Email</span>
             <input
+              id="auth-email"
               type="email"
               autoComplete="email"
+              inputMode="email"
+              required
               value={authForm.email}
+              aria-describedby={
+                authStatus.type === "error"
+                  ? "auth-email-help auth-status"
+                  : "auth-email-help"
+              }
               onChange={(event) =>
                 onFieldChange("email", event.target.value)
               }
             />
+            <small className="field-helper" id="auth-email-help">
+              Use a valid email address.
+            </small>
           </label>
 
-          <label>
+          <label htmlFor="auth-password">
             <span>Password</span>
             <input
+              id="auth-password"
               type="password"
               autoComplete={
                 authMode === "register" ? "new-password" : "current-password"
               }
+              required
+              minLength="6"
               value={authForm.password}
+              aria-describedby={
+                authStatus.type === "error"
+                  ? "auth-password-help auth-status"
+                  : "auth-password-help"
+              }
               onChange={(event) =>
                 onFieldChange("password", event.target.value)
               }
             />
+            <small className="field-helper" id="auth-password-help">
+              At least 6 characters.
+            </small>
           </label>
 
           {authStatus.message && (
-            <StatusMessage type={authStatus.type || "info"}>
+            <StatusMessage
+              id="auth-status"
+              type={authStatus.type || "info"}
+            >
               {authStatus.message}
             </StatusMessage>
           )}
 
           <button
-            className="auth-submit-button"
+            className="button button-primary auth-submit-button"
             type="submit"
             disabled={isSubmitting}
           >
             {isSubmitting
-              ? "Submitting..."
+              ? authMode === "register"
+                ? "Creating account…"
+                : "Logging in…"
               : authMode === "register"
                 ? "Create Account"
                 : "Log In"}
