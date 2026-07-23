@@ -860,6 +860,10 @@ function App() {
     }));
   };
 
+  const handleClearFilters = () => {
+    setResultsFilters(createDefaultResultsFilters());
+  };
+
   const updateValueScoreWeight = (factor, value) => {
     if (!(factor in DEFAULT_VALUE_SCORE_WEIGHTS)) {
       return;
@@ -1177,6 +1181,7 @@ function App() {
           onOpenCompare={openCompareView}
           onClearCompareStatus={clearCompareStatus}
           onFilterChange={handleFilterChange}
+          onClearFilters={handleClearFilters}
           onDetails={openListingDetail}
           onEditSearch={returnToSearch}
           onRetry={retryResults}
