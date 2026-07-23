@@ -1,7 +1,19 @@
 import { housingTypes, safetyLevels } from "../utils/constants";
 import { getCampusLabel } from "../utils/campusFormatters";
+import CollapsiblePanel from "./CollapsiblePanel";
 import RecentSearches from "./RecentSearches";
 import StatusMessage from "./StatusMessage";
+
+const getFormSummaryChips = (formData) =>
+  [
+    { label: formData?.campus || "No campus selected" },
+    formData?.housingType &&
+      formData.housingType !== "All types" && { label: formData.housingType },
+    { label: `$${formData?.minRent} - $${formData?.maxRent}/mo` },
+    { label: `<= ${formData?.maxCommute} min commute` },
+    formData?.safetyLevel &&
+      formData.safetyLevel !== "Any" && { label: formData.safetyLevel },
+  ].filter(Boolean);
 
 function SearchForm({
   campuses,
@@ -20,22 +32,33 @@ function SearchForm({
   isLoadingRecentSearches = false,
 }) {
   const isSubmittingSearch = isSavingPreference || isSearchingListings;
+  const formSummaryChips = getFormSummaryChips(formData);
 
   return (
     <div className="dashboard-content">
       <section className="search-card" aria-labelledby="criteria-title">
-        <div className="section-heading-row search-card-heading">
-          <div>
-            <p className="section-eyebrow">Housing criteria</p>
-            <h2 id="criteria-title">Set Your Search Criteria</h2>
-            <p>
-              Choose the factors that matter most. You can adjust these details
-              before viewing results.
-            </p>
-          </div>
-        </div>
+        <CollapsiblePanel
+          title="Advanced Search"
+          subtitle="Fine-tune every manual filter: campus, rent, commute, safety, and more."
+          defaultExpanded={false}
+          headerExtra={
+            <div
+              className="search-chip-list"
+              aria-label="Current search criteria"
+            >
+              {formSummaryChips.map((chip) => (
+                <span key={chip.label} className="search-chip">
+                  {chip.label}
+                </span>
+              ))}
+            </div>
+          }
+        >
+          <h2 id="criteria-title" className="visually-hidden">
+            Set Your Search Criteria
+          </h2>
 
-        <form className="search-form" onSubmit={onSubmit} noValidate>
+          <form className="search-form" onSubmit={onSubmit} noValidate>
           <fieldset className="form-section">
             <legend>Campus and housing type</legend>
             <p className="form-section-helper">
@@ -264,6 +287,7 @@ function SearchForm({
             </button>
           </div>
         </form>
+        </CollapsiblePanel>
       </section>
 
       <RecentSearches
