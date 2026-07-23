@@ -24,8 +24,11 @@ import BrowseResults from "./components/BrowseResults";
 import CompareListings from "./components/CompareListings";
 import ListingDetail from "./components/ListingDetail";
 import SavedListings from "./components/SavedListings";
+import Collections from "./components/Collections";
+import CollectionDetail from "./components/CollectionDetail";
+import CollectionPickerModal from "./components/CollectionPickerModal";
 import StatusMessage from "./components/StatusMessage";
-import { getListingId } from "./utils/listingFormatters";
+import { getListingId, getListingTitle } from "./utils/listingFormatters";
 import { getRecommendationBadgesByListingId } from "./utils/recommendationBadges";
 
 const MAX_COMPARE_LISTINGS = 3;
@@ -97,6 +100,29 @@ function App() {
   const [valueScoreWeights, setValueScoreWeights] = useState({
     ...DEFAULT_VALUE_SCORE_WEIGHTS,
   });
+  const [collections, setCollections] = useState([]);
+  const [isLoadingCollections, setIsLoadingCollections] = useState(false);
+  const [collectionsError, setCollectionsError] = useState("");
+  const [collectionActionStatus, setCollectionActionStatus] = useState({
+    type: "",
+    message: "",
+  });
+  const [isCreatingCollection, setIsCreatingCollection] = useState(false);
+  const [pendingCollectionIds, setPendingCollectionIds] = useState(
+    () => new Set(),
+  );
+  const [selectedCollectionId, setSelectedCollectionId] = useState("");
+  const [collectionDetail, setCollectionDetail] = useState(null);
+  const [isLoadingCollectionDetail, setIsLoadingCollectionDetail] =
+    useState(false);
+  const [collectionDetailError, setCollectionDetailError] = useState("");
+  const [removingFromCollectionIds, setRemovingFromCollectionIds] = useState(
+    () => new Set(),
+  );
+  const [collectionPickerListingId, setCollectionPickerListingId] =
+    useState("");
+  const [isSubmittingCollectionPicker, setIsSubmittingCollectionPicker] =
+    useState(false);
 
   const resetSessionState = ({ resetForm = false } = {}) => {
     setStatus({ type: "", message: "" });
@@ -124,6 +150,15 @@ function App() {
     setCompareListingIds([]);
     setCompareStatus({ type: "", message: "" });
     setValueScoreWeights({ ...DEFAULT_VALUE_SCORE_WEIGHTS });
+    setCollections([]);
+    setCollectionsError("");
+    setCollectionActionStatus({ type: "", message: "" });
+    setPendingCollectionIds(new Set());
+    setSelectedCollectionId("");
+    setCollectionDetail(null);
+    setCollectionDetailError("");
+    setRemovingFromCollectionIds(new Set());
+    setCollectionPickerListingId("");
     if (resetForm) {
       setFormData(defaultFormData);
     }
@@ -497,6 +532,424 @@ function App() {
         next.delete(listingId);
         return next;
       });
+    }
+  };
+
+  const loadCollections = async () => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    setIsLoadingCollections(true);
+    setCollectionsError("");
+
+    try {
+      const data = await apiRequest("/api/collections", {
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      setCollections(data.collections || []);
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setCollectionsError(
+        "We could not load your collections right now. Please try again.",
+      );
+    } finally {
+      setIsLoadingCollections(false);
+    }
+  };
+
+  const openCollections = () => {
+    setCollectionActionStatus({ type: "", message: "" });
+    setCurrentView("collections");
+    loadCollections();
+  };
+
+  const returnFromCollections = () => {
+    setCurrentView("saved");
+  };
+
+  const createCollection = async ({ name, description }) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    setIsCreatingCollection(true);
+    setCollectionActionStatus({ type: "", message: "" });
+
+    try {
+      await apiRequest("/api/collections", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, description }),
+      });
+      await loadCollections();
+      setCollectionActionStatus({
+        type: "success",
+        message: "Collection created.",
+      });
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setCollectionActionStatus({
+        type: "error",
+        message: "We couldn't create that collection. Please try again.",
+      });
+    } finally {
+      setIsCreatingCollection(false);
+    }
+  };
+
+  const renameCollection = async (collectionId, { name, description }) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    setPendingCollectionIds((current) => new Set(current).add(collectionId));
+    setCollectionActionStatus({ type: "", message: "" });
+
+    try {
+      await apiRequest(`/api/collections/${collectionId}`, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, description }),
+      });
+      await loadCollections();
+      setCollectionActionStatus({
+        type: "success",
+        message: "Collection updated.",
+      });
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setCollectionActionStatus({
+        type: "error",
+        message: "We couldn't update that collection. Please try again.",
+      });
+    } finally {
+      setPendingCollectionIds((current) => {
+        const next = new Set(current);
+        next.delete(collectionId);
+        return next;
+      });
+    }
+  };
+
+  const deleteCollection = async (collectionId) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    setPendingCollectionIds((current) => new Set(current).add(collectionId));
+    setCollectionActionStatus({ type: "", message: "" });
+
+    try {
+      await apiRequest(`/api/collections/${collectionId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      setCollections((current) =>
+        current.filter((collection) => collection._id !== collectionId),
+      );
+      setCollectionActionStatus({
+        type: "success",
+        message: "Collection deleted. Its listings are still saved.",
+      });
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setCollectionActionStatus({
+        type: "error",
+        message: "We couldn't delete that collection. Please try again.",
+      });
+    } finally {
+      setPendingCollectionIds((current) => {
+        const next = new Set(current);
+        next.delete(collectionId);
+        return next;
+      });
+    }
+  };
+
+  const openCollectionDetail = async (collectionId) => {
+    if (!collectionId) {
+      return;
+    }
+
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    setSelectedCollectionId(collectionId);
+    setCollectionDetail(null);
+    setCollectionDetailError("");
+    setIsLoadingCollectionDetail(true);
+    setCurrentView("collectionDetail");
+
+    try {
+      const data = await apiRequest(
+        `/api/collections/${collectionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+        { campus: activeSearch?.campus },
+      );
+      setCollectionDetail({
+        collection: data.collection,
+        listings: data.listings || [],
+      });
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setCollectionDetailError(
+        "This collection could not be loaded. Please retry or go back.",
+      );
+    } finally {
+      setIsLoadingCollectionDetail(false);
+    }
+  };
+
+  const retryCollectionDetail = () => {
+    if (selectedCollectionId) {
+      openCollectionDetail(selectedCollectionId);
+    }
+  };
+
+  const returnFromCollectionDetail = () => {
+    setCurrentView("collections");
+  };
+
+  const removeListingFromCollection = async (listingId) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken || !listingId || !selectedCollectionId) {
+      return;
+    }
+
+    setRemovingFromCollectionIds((current) => new Set(current).add(listingId));
+
+    try {
+      await apiRequest(
+        `/api/collections/${selectedCollectionId}/listings/${listingId}`,
+        {
+          method: "DELETE",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+      );
+      setCollectionDetail((current) =>
+        current
+          ? {
+              ...current,
+              listings: current.listings.filter(
+                (listing) => getListingId(listing) !== listingId,
+              ),
+            }
+          : current,
+      );
+      setListingActionStatus({
+        type: "success",
+        message: "Listing removed from collection.",
+      });
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setListingActionStatus({
+        type: "error",
+        message:
+          "We couldn't remove that listing from the collection. Please try again.",
+      });
+    } finally {
+      setRemovingFromCollectionIds((current) => {
+        const next = new Set(current);
+        next.delete(listingId);
+        return next;
+      });
+    }
+  };
+
+  const openCollectionPicker = (listingId) => {
+    if (!listingId) {
+      return;
+    }
+    setListingActionStatus({ type: "", message: "" });
+    setCollectionPickerListingId(listingId);
+    loadCollections();
+  };
+
+  const closeCollectionPicker = () => {
+    setCollectionPickerListingId("");
+  };
+
+  const addListingToCollections = async (collectionIds) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    const listingId = collectionPickerListingId;
+    if (
+      !authUser ||
+      !authToken ||
+      !listingId ||
+      !collectionIds ||
+      collectionIds.length === 0
+    ) {
+      return;
+    }
+
+    setIsSubmittingCollectionPicker(true);
+
+    try {
+      await Promise.all(
+        collectionIds.map((collectionId) =>
+          apiRequest(`/api/collections/${collectionId}/listings`, {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ listingId }),
+          }),
+        ),
+      );
+      await loadCollections();
+      setListingActionStatus({
+        type: "success",
+        message: `Added to ${collectionIds.length} collection${
+          collectionIds.length === 1 ? "" : "s"
+        }.`,
+      });
+      setCollectionPickerListingId("");
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setListingActionStatus({
+        type: "error",
+        message:
+          "We couldn't add this listing to all selected collections. Please try again.",
+      });
+    } finally {
+      setIsSubmittingCollectionPicker(false);
+    }
+  };
+
+  const createAndAddCollectionFromPicker = async (name) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    const listingId = collectionPickerListingId;
+    if (!authUser || !authToken || !listingId) {
+      return;
+    }
+
+    setIsSubmittingCollectionPicker(true);
+
+    try {
+      const createData = await apiRequest("/api/collections", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name, description: "" }),
+      });
+      const newCollectionId = createData.collection._id;
+
+      await apiRequest(`/api/collections/${newCollectionId}/listings`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ listingId }),
+      });
+      await loadCollections();
+      setListingActionStatus({
+        type: "success",
+        message: `Created "${name}" and added this listing.`,
+      });
+      setCollectionPickerListingId("");
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        clearAuthStorage();
+        setAuthUser(null);
+        resetSessionState({ resetForm: true });
+        setAuthStatus({
+          type: "error",
+          message: "Your saved login expired. Please log in again.",
+        });
+        return;
+      }
+      setListingActionStatus({
+        type: "error",
+        message: "We couldn't create that collection. Please try again.",
+      });
+    } finally {
+      setIsSubmittingCollectionPicker(false);
     }
   };
 
@@ -939,11 +1392,17 @@ function App() {
   };
 
   const openCompareView = () => {
-    setCompareOrigin(
-      currentView === "details" && listingDetailOrigin === "saved"
-        ? "saved"
-        : "results",
-    );
+    let origin = "results";
+
+    if (currentView === "saved" || currentView === "collectionDetail") {
+      origin = currentView;
+    } else if (currentView === "details") {
+      if (listingDetailOrigin === "saved" || listingDetailOrigin === "collectionDetail") {
+        origin = listingDetailOrigin;
+      }
+    }
+
+    setCompareOrigin(origin);
     setListingDetailOrigin("results");
     setCurrentView("compare");
   };
@@ -973,7 +1432,9 @@ function App() {
           ? "saved"
           : currentView === "compare"
             ? "compare"
-            : "results"),
+            : currentView === "collectionDetail"
+              ? "collectionDetail"
+              : "results"),
     );
     setSelectedListingId(listingId);
     setSelectedListing(null);
@@ -1012,8 +1473,8 @@ function App() {
   const returnFromCompare = () => {
     setListingDetailOrigin("results");
     setCurrentView(
-      compareOrigin === "saved"
-        ? "saved"
+      compareOrigin === "saved" || compareOrigin === "collectionDetail"
+        ? compareOrigin
         : activeSearch
           ? "results"
           : "search",
@@ -1116,7 +1577,11 @@ function App() {
         onOpenSaved={openSavedListings}
         onOpenSearch={returnToSearch}
       />
-      {currentView !== "saved" && <StepProgress currentStep={currentView} />}
+      {currentView !== "saved" &&
+        currentView !== "collections" &&
+        currentView !== "collectionDetail" && (
+          <StepProgress currentStep={currentView} />
+        )}
 
       {(authStatus.message || listingActionStatus.message) && (
         <div className="app-feedback-region" aria-label="Application notifications">
@@ -1211,7 +1676,9 @@ function App() {
           backLabel={
             compareOrigin === "saved"
               ? "Back to Saved Listings"
-              : "Back to Results"
+              : compareOrigin === "collectionDetail"
+                ? "Back to Collection"
+                : "Back to Results"
           }
           onDetails={openListingDetail}
         />
@@ -1235,6 +1702,46 @@ function App() {
           onCompareListing={openCompareWithListing}
           badgesByListingId={recommendationBadgesByListingId}
           valueScoreWeights={valueScoreWeights}
+          onOpenCollections={openCollections}
+          onAddToCollection={openCollectionPicker}
+        />
+      )}
+
+      {currentView === "collections" && (
+        <Collections
+          collections={collections}
+          isLoading={isLoadingCollections}
+          errorMessage={collectionsError}
+          actionStatus={collectionActionStatus}
+          onBack={returnFromCollections}
+          onOpenCollection={openCollectionDetail}
+          onCreateCollection={createCollection}
+          onRenameCollection={renameCollection}
+          onDeleteCollection={deleteCollection}
+          isCreating={isCreatingCollection}
+          pendingCollectionIds={pendingCollectionIds}
+        />
+      )}
+
+      {currentView === "collectionDetail" && (
+        <CollectionDetail
+          collection={collectionDetail?.collection || null}
+          listings={collectionDetail?.listings || []}
+          campus={activeSearch?.campus}
+          isLoading={isLoadingCollectionDetail}
+          errorMessage={collectionDetailError}
+          onDetails={openListingDetail}
+          onBack={returnFromCollectionDetail}
+          onRetry={retryCollectionDetail}
+          savedListingIds={savedListingIds}
+          savingListingIds={savingListingIds}
+          onToggleSave={toggleSavedListing}
+          removingListingIds={removingFromCollectionIds}
+          onRemoveFromCollection={removeListingFromCollection}
+          compareListingIds={compareListingIds}
+          onCompareListing={openCompareWithListing}
+          badgesByListingId={recommendationBadgesByListingId}
+          valueScoreWeights={valueScoreWeights}
         />
       )}
 
@@ -1251,7 +1758,9 @@ function App() {
               ? "Back to Compare"
               : listingDetailOrigin === "saved"
                 ? "Back to Saved Listings"
-                : "Back to Results"
+                : listingDetailOrigin === "collectionDetail"
+                  ? "Back to Collection"
+                  : "Back to Results"
           }
           onRetry={retryListingDetail}
           isSaved={savedListingIds.has(selectedListingId)}
@@ -1262,6 +1771,22 @@ function App() {
           maxCompareListings={MAX_COMPARE_LISTINGS}
           onCompareListing={openCompareWithListing}
           valueScoreWeights={valueScoreWeights}
+        />
+      )}
+
+      {collectionPickerListingId && (
+        <CollectionPickerModal
+          listingTitle={getListingTitle(
+            savedListings.find(
+              (listing) => getListingId(listing) === collectionPickerListingId,
+            ),
+          )}
+          collections={collections}
+          isLoading={isLoadingCollections}
+          isSubmitting={isSubmittingCollectionPicker}
+          onAddToCollections={addListingToCollections}
+          onCreateAndAdd={createAndAddCollectionFromPicker}
+          onClose={closeCollectionPicker}
         />
       )}
     </main>

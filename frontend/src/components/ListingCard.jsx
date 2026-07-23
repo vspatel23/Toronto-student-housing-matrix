@@ -32,6 +32,9 @@ function ListingCard({
   savingLabel = "Updating...",
   isCompared = false,
   onCompareListing,
+  onAddToCollection,
+  onRemoveFromCollection,
+  isRemovingFromCollection = false,
   valueScoreWeights,
 }) {
   const listingId = getListingId(listing);
@@ -211,6 +214,32 @@ function ListingCard({
             }}
           >
             {isSaving ? savingLabel : isSaved ? savedLabel : saveLabel}
+          </button>
+        )}
+        {onAddToCollection && (
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!listingId}
+            onClick={(event) => {
+              event.stopPropagation();
+              onAddToCollection(listingId);
+            }}
+          >
+            Add to Collection
+          </button>
+        )}
+        {onRemoveFromCollection && (
+          <button
+            type="button"
+            className="secondary-button"
+            disabled={!listingId || isRemovingFromCollection}
+            onClick={(event) => {
+              event.stopPropagation();
+              onRemoveFromCollection(listingId);
+            }}
+          >
+            {isRemovingFromCollection ? "Removing..." : "Remove from Collection"}
           </button>
         )}
       </footer>
