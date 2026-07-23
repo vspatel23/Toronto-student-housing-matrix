@@ -1,6 +1,13 @@
 import BrandIdentity from "./BrandIdentity";
 
-function Header({ currentView, userName, onLogout, onOpenSaved, onOpenSearch }) {
+function Header({
+  currentView,
+  userName,
+  onLogout,
+  onOpenSaved,
+  onOpenSearch,
+  onLogIn,
+}) {
   const isSavedView = currentView === "saved";
 
   return (
@@ -30,17 +37,25 @@ function Header({ currentView, userName, onLogout, onOpenSaved, onOpenSearch }) 
         </nav>
 
         <div className="header-account">
-          <span className="header-user">
-            <span className="header-user-label">Signed in as</span>
-            <strong>{userName}</strong>
-          </span>
-          <button
-            type="button"
-            className="button button-danger-ghost"
-            onClick={onLogout}
-          >
-            Log out
-          </button>
+          {userName ? (
+            <>
+              <span className="header-user">
+                <span className="header-user-label">Signed in as</span>
+                <strong>{userName}</strong>
+              </span>
+              <button
+                type="button"
+                className="button button-danger-ghost"
+                onClick={onLogout}
+              >
+                Log out
+              </button>
+            </>
+          ) : (
+            <button type="button" className="button button-nav" onClick={onLogIn}>
+              Log In
+            </button>
+          )}
         </div>
       </div>
     </header>

@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-function CopyLinkButton({ label = "Copy Link", className = "" }) {
+function CopyLinkButton({ label = "Copy Link", className = "", url }) {
   const [status, setStatus] = useState("");
 
   const handleCopy = async () => {
     try {
-      await navigator.clipboard.writeText(window.location.href);
+      await navigator.clipboard.writeText(url || window.location.href);
       setStatus("Link copied.");
     } catch {
       setStatus("Couldn't copy the link. Please copy it from the address bar.");

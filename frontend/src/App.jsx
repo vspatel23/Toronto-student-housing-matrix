@@ -39,6 +39,17 @@ import { getRecommendationBadgesByListingId } from "./utils/recommendationBadges
 const MAX_COMPARE_LISTINGS = 3;
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 
+// Listing detail, search results, and comparison views show generic
+// housing data (not account-specific), so they're viewable without an
+// account per Issue #48 — only Saved Listings and private Collections
+// stay behind the login gate. Shared collections are public via an
+// opaque share token, never by the private collection ID.
+const isPublicRoute = (pathname) =>
+  pathname === "/results" ||
+  pathname === "/compare" ||
+  /^\/listings\/[^/]+$/.test(pathname) ||
+  /^\/shared\/collections\/[^/]+$/.test(pathname);
+
 const createDefaultResultsFilters = () => ({
   minRent: "",
   maxRent: "",
@@ -149,6 +160,7 @@ function App() {
   const restoredCompareKeyRef = useRef("");
   const restoredCollectionKeyRef = useRef("");
   const restoredCollectionsListKeyRef = useRef("");
+  const restoredSharedCollectionKeyRef = useRef("");
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -226,6 +238,13 @@ function App() {
     useState("");
   const [isSubmittingCollectionPicker, setIsSubmittingCollectionPicker] =
     useState(false);
+  const [isUpdatingShare, setIsUpdatingShare] = useState(false);
+  const [shareActionError, setShareActionError] = useState("");
+  const [selectedShareToken, setSelectedShareToken] = useState("");
+  const [sharedCollection, setSharedCollection] = useState(null);
+  const [isLoadingSharedCollection, setIsLoadingSharedCollection] =
+    useState(false);
+  const [sharedCollectionError, setSharedCollectionError] = useState("");
 
   const getCurrentRouteOrigin = () => {
     if (location.pathname === "/saved") {
@@ -233,6 +252,9 @@ function App() {
     }
     if (location.pathname.startsWith("/saved/collections/")) {
       return "collectionDetail";
+    }
+    if (location.pathname.startsWith("/shared/collections/")) {
+      return "sharedCollection";
     }
     if (location.pathname === "/compare") {
       return "compare";
@@ -864,6 +886,86 @@ function App() {
 
   const returnFromCollectionDetail = () => {
     navigate("/saved/collections");
+  };
+
+  const enableCollectionShare = async () => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken || !selectedCollectionId) {
+      return;
+    }
+
+    setIsUpdatingShare(true);
+    setShareActionError("");
+
+    try {
+      const data = await apiRequest(
+        `/api/collections/${selectedCollectionId}/share`,
+        {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${authToken}`,
+          },
+        },
+      );
+      setCollectionDetail((current) =>
+        current
+          ? {
+              ...current,
+              collection: {
+                ...current.collection,
+                shareToken: data.shareToken,
+              },
+            }
+          : current,
+      );
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleSessionExpired();
+        return;
+      }
+      setShareActionError(
+        "We could not enable the public link right now. Please try again.",
+      );
+    } finally {
+      setIsUpdatingShare(false);
+    }
+  };
+
+  const disableCollectionShare = async () => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken || !selectedCollectionId) {
+      return;
+    }
+
+    setIsUpdatingShare(true);
+    setShareActionError("");
+
+    try {
+      await apiRequest(`/api/collections/${selectedCollectionId}/share`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${authToken}`,
+        },
+      });
+      setCollectionDetail((current) =>
+        current
+          ? {
+              ...current,
+              collection: { ...current.collection, shareToken: null },
+            }
+          : current,
+      );
+    } catch (error) {
+      if (isUnauthorizedError(error)) {
+        handleSessionExpired();
+        return;
+      }
+      setShareActionError(
+        "We could not turn off the public link right now. Please try again.",
+      );
+    } finally {
+      setIsUpdatingShare(false);
+    }
   };
 
   const removeListingFromCollection = async (listingId) => {
@@ -1540,6 +1642,10 @@ function App() {
         return selectedCollectionId
           ? `/saved/collections/${selectedCollectionId}`
           : "/saved/collections";
+      case "sharedCollection":
+        return selectedShareToken
+          ? `/shared/collections/${selectedShareToken}`
+          : "/";
       case "compare":
         return `/compare?ids=${compareListingIdsRef.current.join(",")}`;
       case "results":
@@ -1558,7 +1664,11 @@ function App() {
 
   const returnFromCompare = () => {
     setListingDetailOrigin("results");
-    if (compareOrigin === "saved" || compareOrigin === "collectionDetail") {
+    if (
+      compareOrigin === "saved" ||
+      compareOrigin === "collectionDetail" ||
+      compareOrigin === "sharedCollection"
+    ) {
       navigate(getPathForView(compareOrigin));
       return;
     }
@@ -1607,7 +1717,7 @@ function App() {
   // duplicate dispatches, out-of-order resolution, and the request
   // continuing to resolve after the "owning" effect instance was cleaned up.
   useEffect(() => {
-    if (!authUser || location.pathname !== "/results") {
+    if (location.pathname !== "/results") {
       return;
     }
 
@@ -1668,10 +1778,6 @@ function App() {
   }, [Boolean(authUser), location.pathname, location.search]);
 
   useEffect(() => {
-    if (!authUser) {
-      return;
-    }
-
     const match = location.pathname.match(/^\/listings\/([^/]+)$/);
     if (!match) {
       return;
@@ -1721,7 +1827,7 @@ function App() {
   }, [Boolean(authUser), location.pathname]);
 
   useEffect(() => {
-    if (!authUser || location.pathname !== "/compare") {
+    if (location.pathname !== "/compare") {
       return;
     }
 
@@ -1863,6 +1969,52 @@ function App() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [Boolean(authUser), location.pathname]);
 
+  // Public route: works with or without an account, so it is not gated
+  // on authUser like the private collection-detail effect above.
+  useEffect(() => {
+    const match = location.pathname.match(/^\/shared\/collections\/([^/]+)$/);
+    if (!match) {
+      return;
+    }
+
+    const token = match[1];
+    const restoreKey = location.pathname;
+    if (restoredSharedCollectionKeyRef.current === restoreKey) {
+      return;
+    }
+    restoredSharedCollectionKeyRef.current = restoreKey;
+
+    setSelectedShareToken(token);
+
+    const loadInitialSharedCollection = async () => {
+      setSharedCollection(null);
+      setSharedCollectionError("");
+      setIsLoadingSharedCollection(true);
+
+      try {
+        const data = await apiRequest(`/api/collections/shared/${token}`);
+        if (restoredSharedCollectionKeyRef.current === restoreKey) {
+          setSharedCollection({
+            collection: data.collection,
+            listings: data.listings || [],
+          });
+        }
+      } catch {
+        if (restoredSharedCollectionKeyRef.current === restoreKey) {
+          setSharedCollectionError(
+            "This shared collection could not be found or loaded.",
+          );
+        }
+      } finally {
+        if (restoredSharedCollectionKeyRef.current === restoreKey) {
+          setIsLoadingSharedCollection(false);
+        }
+      }
+    };
+
+    loadInitialSharedCollection();
+  }, [location.pathname]);
+
   if (isAuthChecking) {
     return (
       <main className="auth-page">
@@ -1877,7 +2029,7 @@ function App() {
     );
   }
 
-  if (!authUser) {
+  if (!authUser && !isPublicRoute(location.pathname)) {
     return (
       <AuthForm
         authMode={authMode}
@@ -1891,8 +2043,9 @@ function App() {
     );
   }
 
-  const displayName = authUser.name || authUser.email;
+  const displayName = authUser?.name || authUser?.email || "";
   const isSavedSection = location.pathname.startsWith("/saved");
+  const isSharedSection = location.pathname.startsWith("/shared/");
   const headerView = isSavedSection ? "saved" : "other";
   const stepKey = location.pathname.startsWith("/results")
     ? "results"
@@ -1950,8 +2103,11 @@ function App() {
         onLogout={handleLogout}
         onOpenSaved={openSavedListings}
         onOpenSearch={returnToSearch}
+        onLogIn={returnToSearch}
       />
-      {!isSavedSection && <StepProgress currentStep={stepKey} />}
+      {!isSavedSection && !isSharedSection && (
+        <StepProgress currentStep={stepKey} />
+      )}
 
       {(authStatus.message || listingActionStatus.message) && (
         <div className="app-feedback-region" aria-label="Application notifications">
@@ -2033,7 +2189,7 @@ function App() {
                 onRetry={retryResults}
                 savedListingIds={savedListingIds}
                 savingListingIds={savingListingIds}
-                onToggleSave={toggleSavedListing}
+                onToggleSave={authUser ? toggleSavedListing : undefined}
                 valueScoreWeights={valueScoreWeights}
                 onWeightChange={updateValueScoreWeight}
                 onResetWeights={resetValueScoreWeights}
@@ -2058,7 +2214,7 @@ function App() {
                 valueScoreWeights={valueScoreWeights}
                 savedListingIds={savedListingIds}
                 savingListingIds={savingListingIds}
-                onToggleSave={toggleSavedListing}
+                onToggleSave={authUser ? toggleSavedListing : undefined}
                 onAddCompare={addListingToCompare}
                 onRemoveCompare={removeListingFromCompare}
                 onBackToResults={returnFromCompare}
@@ -2067,7 +2223,9 @@ function App() {
                     ? "Back to Saved Listings"
                     : compareOrigin === "collectionDetail"
                       ? "Back to Collection"
-                      : "Back to Results"
+                      : compareOrigin === "sharedCollection"
+                        ? "Back to Shared Collection"
+                        : "Back to Results"
                 }
                 onDetails={openListingDetail}
               />
@@ -2147,6 +2305,31 @@ function App() {
                 onCompareListing={openCompareWithListing}
                 badgesByListingId={recommendationBadgesByListingId}
                 valueScoreWeights={valueScoreWeights}
+                isUpdatingShare={isUpdatingShare}
+                shareActionError={shareActionError}
+                onEnableShare={enableCollectionShare}
+                onDisableShare={disableCollectionShare}
+              />
+            </>
+          }
+        />
+
+        <Route
+          path="/shared/collections/:token"
+          element={
+            <>
+              <div className="route-share-bar">
+                <CopyLinkButton label="Copy Link to This Collection" />
+              </div>
+              <CollectionDetail
+                readOnly
+                collection={sharedCollection?.collection || null}
+                listings={sharedCollection?.listings || []}
+                isLoading={isLoadingSharedCollection}
+                errorMessage={sharedCollectionError}
+                onDetails={openListingDetail}
+                compareListingIds={compareListingIds}
+                onCompareListing={openCompareWithListing}
               />
             </>
           }
@@ -2173,12 +2356,14 @@ function App() {
                       ? "Back to Saved Listings"
                       : listingDetailOrigin === "collectionDetail"
                         ? "Back to Collection"
-                        : "Back to Results"
+                        : listingDetailOrigin === "sharedCollection"
+                          ? "Back to Shared Collection"
+                          : "Back to Results"
                 }
                 onRetry={retryListingDetail}
                 isSaved={savedListingIds.has(selectedListingId)}
                 isSaving={savingListingIds.has(selectedListingId)}
-                onToggleSave={toggleSavedListing}
+                onToggleSave={authUser ? toggleSavedListing : undefined}
                 isCompared={compareListingIds.includes(selectedListingId)}
                 compareCount={compareListingIds.length}
                 maxCompareListings={MAX_COMPARE_LISTINGS}

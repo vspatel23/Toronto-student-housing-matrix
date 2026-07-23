@@ -29,6 +29,11 @@ const collectionSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    shareToken: {
+      type: String,
+      unique: true,
+      sparse: true,
+    },
   },
   {
     timestamps: true,

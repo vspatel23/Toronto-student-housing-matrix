@@ -1,5 +1,6 @@
 const express = require("express");
 const mongoose = require("mongoose");
+const crypto = require("crypto");
 
 const authenticateUser = require("../middleware/auth");
 const Collection = require("../models/Collection");
@@ -51,6 +52,63 @@ const parseCollectionInput = (req) => {
 
   return { name, description, errors };
 };
+
+// Public, unauthenticated: looks up a collection by its opaque share
+// token instead of ownership, and returns only read-only fields — no
+// userId or other account information is ever included in the response.
+router.get("/shared/:token", async (req, res) => {
+  try {
+    const { token } = req.params;
+
+    if (!token || typeof token !== "string") {
+      return res.status(404).json({
+        success: false,
+        message: "This shared collection is unavailable.",
+      });
+    }
+
+    const collection = await Collection.findOne({ shareToken: token }).populate(
+      { path: "listingIds", select: LISTING_FIELDS },
+    );
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "This shared collection is unavailable.",
+      });
+    }
+
+    const listings = collection.listingIds
+      .filter(Boolean)
+      .map((listing) => {
+        const listingObject = listing.toObject();
+
+        return {
+          ...listingObject,
+          valueScore: calculateValueScore(listingObject, req.query.campus),
+          valueScoreBreakdown: calculateValueScoreBreakdown(
+            listingObject,
+            req.query.campus,
+          ),
+        };
+      });
+
+    return res.json({
+      success: true,
+      collection: {
+        name: collection.name,
+        description: collection.description,
+      },
+      listings,
+    });
+  } catch (error) {
+    console.error("Failed to load shared collection:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while loading shared collection",
+    });
+  }
+});
 
 router.use(authenticateUser);
 
@@ -163,6 +221,7 @@ router.get("/:id", async (req, res) => {
         _id: collection._id,
         name: collection.name,
         description: collection.description,
+        shareToken: collection.shareToken || null,
         createdAt: collection.createdAt,
         updatedAt: collection.updatedAt,
       },
@@ -225,6 +284,77 @@ router.put("/:id", async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Server error while updating collection",
+    });
+  }
+});
+
+router.post("/:id/share", async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid collection ID",
+      });
+    }
+
+    const collection = await Collection.findOne({ _id: id, userId });
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
+      });
+    }
+
+    if (!collection.shareToken) {
+      collection.shareToken = crypto.randomBytes(24).toString("hex");
+      await collection.save();
+    }
+
+    return res.json({ success: true, shareToken: collection.shareToken });
+  } catch (error) {
+    console.error("Failed to enable collection sharing:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while enabling sharing",
+    });
+  }
+});
+
+router.delete("/:id/share", async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { id } = req.params;
+
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid collection ID",
+      });
+    }
+
+    const collection = await Collection.findOneAndUpdate(
+      { _id: id, userId },
+      { $unset: { shareToken: "" } },
+      { new: true },
+    );
+
+    if (!collection) {
+      return res.status(404).json({
+        success: false,
+        message: "Collection not found",
+      });
+    }
+
+    return res.json({ success: true });
+  } catch (error) {
+    console.error("Failed to disable collection sharing:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error while disabling sharing",
     });
   }
 });
