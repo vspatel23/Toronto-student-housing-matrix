@@ -19,6 +19,8 @@ function SavedListings({
   onCompareListing,
   badgesByListingId = {},
   valueScoreWeights,
+  onOpenCollections,
+  onAddToCollection,
 }) {
   const hasListings = listings.length > 0;
 
@@ -39,9 +41,20 @@ function SavedListings({
             and compare trade-offs.
           </p>
         </div>
-        <span className="saved-count-pill" aria-live="polite">
-          <strong>{listings.length}</strong> saved
-        </span>
+        <div className="collection-card-actions">
+          <span className="saved-count-pill" aria-live="polite">
+            <strong>{listings.length}</strong> saved
+          </span>
+          {onOpenCollections && (
+            <button
+              type="button"
+              className="button button-secondary"
+              onClick={onOpenCollections}
+            >
+              Collections
+            </button>
+          )}
+        </div>
       </header>
 
       {isLoading && !hasListings && (
@@ -123,6 +136,7 @@ function SavedListings({
                 savingLabel="Removing..."
                 isCompared={compareListingIds.includes(listingId)}
                 onCompareListing={onCompareListing}
+                onAddToCollection={onAddToCollection}
                 valueScoreWeights={valueScoreWeights}
               />
             );
