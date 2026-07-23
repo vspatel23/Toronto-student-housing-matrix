@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Routes, Route, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import "./App.css";
 import "./styles/ui-cleanup.css";
 import {
@@ -6,6 +7,8 @@ import {
   AUTH_USER_KEY,
   DEFAULT_VALUE_SCORE_WEIGHTS,
   defaultFormData,
+  housingTypes,
+  safetyLevels,
 } from "./utils/constants";
 import { getCampusLabel } from "./utils/campusFormatters";
 import {
@@ -27,11 +30,14 @@ import SavedListings from "./components/SavedListings";
 import Collections from "./components/Collections";
 import CollectionDetail from "./components/CollectionDetail";
 import CollectionPickerModal from "./components/CollectionPickerModal";
+import CopyLinkButton from "./components/CopyLinkButton";
+import NotFound from "./components/NotFound";
 import StatusMessage from "./components/StatusMessage";
 import { getListingId, getListingTitle } from "./utils/listingFormatters";
 import { getRecommendationBadgesByListingId } from "./utils/recommendationBadges";
 
 const MAX_COMPARE_LISTINGS = 3;
+const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
 
 const createDefaultResultsFilters = () => ({
   minRent: "",
@@ -43,9 +49,106 @@ const createDefaultResultsFilters = () => ({
   amenities: [],
 });
 
+const hasValue = (value) =>
+  value !== undefined && value !== null && String(value).trim() !== "";
+
+const buildSearchQueryString = (searchData) => {
+  if (!searchData) {
+    return "";
+  }
+
+  const params = new URLSearchParams();
+
+  if (hasValue(searchData.campus)) {
+    params.set("campus", searchData.campus);
+  }
+  if (hasValue(searchData.minRent)) {
+    params.set("minRent", searchData.minRent);
+  }
+  if (hasValue(searchData.maxRent)) {
+    params.set("maxRent", searchData.maxRent);
+  }
+  if (searchData.housingType && searchData.housingType !== "All types") {
+    params.set("housingType", searchData.housingType);
+  }
+  if (searchData.safetyLevel && searchData.safetyLevel !== "Any") {
+    params.set("safetyLevel", searchData.safetyLevel);
+  }
+  if (hasValue(searchData.maxCommute)) {
+    params.set("maxCommute", searchData.maxCommute);
+  }
+
+  return params.toString();
+};
+
+const parseSearchFromQuery = (searchParams) => {
+  const campus = searchParams.get("campus") || "";
+  if (!campus) {
+    return null;
+  }
+
+  const minRent = Number(searchParams.get("minRent"));
+  const maxRent = Number(searchParams.get("maxRent"));
+  const maxCommute = Number(searchParams.get("maxCommute"));
+  const housingTypeParam = searchParams.get("housingType") || "All types";
+  const safetyLevelParam = searchParams.get("safetyLevel") || "Any";
+
+  return {
+    campus,
+    minRent: Number.isFinite(minRent) ? minRent : defaultFormData.minRent,
+    maxRent: Number.isFinite(maxRent) ? maxRent : defaultFormData.maxRent,
+    maxCommute: Number.isFinite(maxCommute)
+      ? maxCommute
+      : defaultFormData.maxCommute,
+    housingType: housingTypes.includes(housingTypeParam)
+      ? housingTypeParam
+      : "All types",
+    safetyLevel: safetyLevels.includes(safetyLevelParam)
+      ? safetyLevelParam
+      : "Any",
+    notes: "",
+  };
+};
+
+const isSameSearch = (a, b) =>
+  Boolean(a) &&
+  Boolean(b) &&
+  a.campus === b.campus &&
+  Number(a.minRent) === Number(b.minRent) &&
+  Number(a.maxRent) === Number(b.maxRent) &&
+  Number(a.maxCommute) === Number(b.maxCommute) &&
+  a.housingType === b.housingType &&
+  a.safetyLevel === b.safetyLevel;
+
+const parseCompareIdsFromQuery = (searchParams) => {
+  const raw = searchParams.get("ids") || "";
+  const ids = raw
+    .split(",")
+    .map((id) => id.trim())
+    .filter((id) => MONGO_ID_PATTERN.test(id));
+
+  return Array.from(new Set(ids)).slice(0, MAX_COMPARE_LISTINGS);
+};
+
+const sameIdSet = (a, b) => {
+  if (a.length !== b.length) {
+    return false;
+  }
+  const setA = new Set(a);
+  return b.every((id) => setA.has(id));
+};
+
 function App() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [searchParams] = useSearchParams();
   const latestListingsRequestId = useRef(0);
   const compareListingIdsRef = useRef([]);
+  const restoredResultsKeyRef = useRef("");
+  const restoredListingKeyRef = useRef("");
+  const restoredCompareKeyRef = useRef("");
+  const restoredCollectionKeyRef = useRef("");
+  const restoredCollectionsListKeyRef = useRef("");
   const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({
     name: "",
@@ -68,7 +171,6 @@ function App() {
   const [campusError, setCampusError] = useState("");
   const [listings, setListings] = useState([]);
   const [activeSearch, setActiveSearch] = useState(null);
-  const [currentView, setCurrentView] = useState("search");
   const [resultsFilters, setResultsFilters] = useState(
     createDefaultResultsFilters,
   );
@@ -78,6 +180,7 @@ function App() {
   const [selectedListing, setSelectedListing] = useState(null);
   const [isLoadingListing, setIsLoadingListing] = useState(false);
   const [listingError, setListingError] = useState("");
+  const [directlyFetchedListings, setDirectlyFetchedListings] = useState([]);
   const [isSavingPreference, setIsSavingPreference] = useState(false);
   const [recentSearches, setRecentSearches] = useState([]);
   const [isLoadingRecentSearches, setIsLoadingRecentSearches] = useState(false);
@@ -124,13 +227,25 @@ function App() {
   const [isSubmittingCollectionPicker, setIsSubmittingCollectionPicker] =
     useState(false);
 
+  const getCurrentRouteOrigin = () => {
+    if (location.pathname === "/saved") {
+      return "saved";
+    }
+    if (location.pathname.startsWith("/saved/collections/")) {
+      return "collectionDetail";
+    }
+    if (location.pathname === "/compare") {
+      return "compare";
+    }
+    return "results";
+  };
+
   const resetSessionState = ({ resetForm = false } = {}) => {
     setStatus({ type: "", message: "" });
     setValidationErrors({});
     setListings([]);
     setActiveSearch(null);
     setResultsFilters(createDefaultResultsFilters());
-    setCurrentView("search");
     setResultsError("");
     setCampuses([]);
     setCampusError("");
@@ -138,6 +253,7 @@ function App() {
     setSelectedListing(null);
     setSelectedListingId("");
     setListingError("");
+    setDirectlyFetchedListings([]);
     setRecentSearches([]);
     setSavedListings([]);
     setSavedListingIds(new Set());
@@ -162,6 +278,17 @@ function App() {
     if (resetForm) {
       setFormData(defaultFormData);
     }
+  };
+
+  const handleSessionExpired = () => {
+    clearAuthStorage();
+    setAuthUser(null);
+    resetSessionState({ resetForm: true });
+    setAuthStatus({
+      type: "error",
+      message: "Your saved login expired. Please log in again.",
+    });
+    navigate("/", { replace: true });
   };
 
   useEffect(() => {
@@ -336,18 +463,12 @@ function App() {
           Authorization: `Bearer ${authToken}`,
         },
       });
-      const listings = data.listings || [];
-      setSavedListings(listings);
-      setSavedListingIds(new Set(listings.map((listing) => listing._id)));
+      const nextListings = data.listings || [];
+      setSavedListings(nextListings);
+      setSavedListingIds(new Set(nextListings.map((listing) => listing._id)));
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setSavedListingsError(
@@ -422,9 +543,11 @@ function App() {
           },
         });
         if (isMounted) {
-          const listings = data.listings || [];
-          setSavedListings(listings);
-          setSavedListingIds(new Set(listings.map((listing) => listing._id)));
+          const nextListings = data.listings || [];
+          setSavedListings(nextListings);
+          setSavedListingIds(
+            new Set(nextListings.map((listing) => listing._id)),
+          );
         }
       } catch {
         if (isMounted) {
@@ -510,13 +633,7 @@ function App() {
       });
 
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
 
@@ -553,13 +670,7 @@ function App() {
       setCollections(data.collections || []);
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setCollectionsError(
@@ -572,12 +683,12 @@ function App() {
 
   const openCollections = () => {
     setCollectionActionStatus({ type: "", message: "" });
-    setCurrentView("collections");
+    navigate("/saved/collections");
     loadCollections();
   };
 
   const returnFromCollections = () => {
-    setCurrentView("saved");
+    navigate("/saved");
   };
 
   const createCollection = async ({ name, description }) => {
@@ -605,13 +716,7 @@ function App() {
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setCollectionActionStatus({
@@ -648,13 +753,7 @@ function App() {
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setCollectionActionStatus({
@@ -695,13 +794,7 @@ function App() {
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setCollectionActionStatus({
@@ -717,17 +810,15 @@ function App() {
     }
   };
 
-  const openCollectionDetail = async (collectionId) => {
-    if (!collectionId) {
+  const fetchCollectionDetail = async (collectionId) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authToken || !collectionId) {
       return;
     }
 
-    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
-    setSelectedCollectionId(collectionId);
     setCollectionDetail(null);
     setCollectionDetailError("");
     setIsLoadingCollectionDetail(true);
-    setCurrentView("collectionDetail");
 
     try {
       const data = await apiRequest(
@@ -745,13 +836,7 @@ function App() {
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setCollectionDetailError(
@@ -762,14 +847,23 @@ function App() {
     }
   };
 
+  const openCollectionDetail = (collectionId) => {
+    if (!collectionId) {
+      return;
+    }
+
+    setSelectedCollectionId(collectionId);
+    navigate(`/saved/collections/${collectionId}`);
+  };
+
   const retryCollectionDetail = () => {
     if (selectedCollectionId) {
-      openCollectionDetail(selectedCollectionId);
+      fetchCollectionDetail(selectedCollectionId);
     }
   };
 
   const returnFromCollectionDetail = () => {
-    setCurrentView("collections");
+    navigate("/saved/collections");
   };
 
   const removeListingFromCollection = async (listingId) => {
@@ -806,13 +900,7 @@ function App() {
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setListingActionStatus({
@@ -880,13 +968,7 @@ function App() {
       setCollectionPickerListingId("");
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setListingActionStatus({
@@ -935,13 +1017,7 @@ function App() {
       setCollectionPickerListingId("");
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
       setListingActionStatus({
@@ -1020,6 +1096,10 @@ function App() {
 
       localStorage.setItem(AUTH_TOKEN_KEY, data.token);
       localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+      // Intentionally do not navigate here: the current URL (whatever the
+      // user was trying to reach before the auth gate caught them) stays
+      // active, and each route's own data-restoration effect takes it from
+      // there. This is what gives us "return to intended page" on login.
       resetSessionState({ resetForm: true });
       setAuthUser(data.user);
       setAuthForm({ name: "", email: "", password: "" });
@@ -1050,6 +1130,7 @@ function App() {
     setAuthForm({ name: "", email: "", password: "" });
     resetSessionState({ resetForm: true });
     setAuthStatus({ type: "success", message: "You’re logged out." });
+    navigate("/", { replace: true });
   };
 
   const updateField = (field, value) => {
@@ -1215,7 +1296,7 @@ function App() {
         safetyLevel: "Any",
         maxCommute: searchSnapshot.maxCommute,
       });
-      setCurrentView("results");
+      navigate(`/results?${buildSearchQueryString(searchSnapshot)}`);
       setIsSavingPreference(false);
 
       let listingData = { count: 0 };
@@ -1259,13 +1340,7 @@ function App() {
       });
     } catch (error) {
       if (isUnauthorizedError(error)) {
-        clearAuthStorage();
-        setAuthUser(null);
-        resetSessionState({ resetForm: true });
-        setAuthStatus({
-          type: "error",
-          message: "Your saved login expired. Please log in again.",
-        });
+        handleSessionExpired();
         return;
       }
 
@@ -1295,7 +1370,7 @@ function App() {
 
   const retryResults = async () => {
     if (!activeSearch) {
-      setCurrentView("search");
+      navigate("/");
       return;
     }
 
@@ -1389,22 +1464,16 @@ function App() {
       type: "success",
       message: "Removed from comparison.",
     });
+
+    if (location.pathname === "/compare") {
+      navigate(`/compare?ids=${nextIds.join(",")}`, { replace: true });
+    }
   };
 
   const openCompareView = () => {
-    let origin = "results";
-
-    if (currentView === "saved" || currentView === "collectionDetail") {
-      origin = currentView;
-    } else if (currentView === "details") {
-      if (listingDetailOrigin === "saved" || listingDetailOrigin === "collectionDetail") {
-        origin = listingDetailOrigin;
-      }
-    }
-
-    setCompareOrigin(origin);
+    setCompareOrigin(getCurrentRouteOrigin());
     setListingDetailOrigin("results");
-    setCurrentView("compare");
+    navigate(`/compare?ids=${compareListingIdsRef.current.join(",")}`);
   };
 
   const openCompareWithListing = (listingId) => {
@@ -1418,35 +1487,34 @@ function App() {
       setCompareStatus({ type: "", message: "" });
     }
 
-    openCompareView();
+    setCompareOrigin(getCurrentRouteOrigin());
+    setListingDetailOrigin("results");
+    navigate(`/compare?ids=${compareListingIdsRef.current.join(",")}`);
   };
 
-  const openListingDetail = async (listingId, originOverride = "") => {
+  const openListingDetail = (listingId, originOverride = "") => {
     if (!listingId) {
       return;
     }
 
-    setListingDetailOrigin(
-      originOverride ||
-        (currentView === "saved"
-          ? "saved"
-          : currentView === "compare"
-            ? "compare"
-            : currentView === "collectionDetail"
-              ? "collectionDetail"
-              : "results"),
-    );
+    setListingDetailOrigin(originOverride || getCurrentRouteOrigin());
+    const campusQuery = activeSearch?.campus
+      ? `?campus=${encodeURIComponent(activeSearch.campus)}`
+      : "";
+    navigate(`/listings/${listingId}${campusQuery}`);
+  };
+
+  const fetchListingDetail = async (listingId, campusOverride) => {
     setSelectedListingId(listingId);
     setSelectedListing(null);
     setListingError("");
     setIsLoadingListing(true);
-    setCurrentView("details");
 
     try {
       const listing = await apiRequest(
         `/api/listings/${listingId}`,
         {},
-        { campus: activeSearch?.campus },
+        { campus: campusOverride ?? activeSearch?.campus },
       );
       setSelectedListing(listing);
     } catch {
@@ -1460,34 +1528,50 @@ function App() {
 
   const retryListingDetail = () => {
     if (selectedListingId) {
-      openListingDetail(selectedListingId, listingDetailOrigin);
+      fetchListingDetail(selectedListingId, searchParams.get("campus"));
+    }
+  };
+
+  const getPathForView = (view) => {
+    switch (view) {
+      case "saved":
+        return "/saved";
+      case "collectionDetail":
+        return selectedCollectionId
+          ? `/saved/collections/${selectedCollectionId}`
+          : "/saved/collections";
+      case "compare":
+        return `/compare?ids=${compareListingIdsRef.current.join(",")}`;
+      case "results":
+      default:
+        return activeSearch
+          ? `/results?${buildSearchQueryString(activeSearch)}`
+          : "/";
     }
   };
 
   const returnToResults = () => {
-    setCurrentView(listingDetailOrigin);
+    navigate(getPathForView(listingDetailOrigin));
     setListingError("");
     setIsLoadingListing(false);
   };
 
   const returnFromCompare = () => {
     setListingDetailOrigin("results");
-    setCurrentView(
-      compareOrigin === "saved" || compareOrigin === "collectionDetail"
-        ? compareOrigin
-        : activeSearch
-          ? "results"
-          : "search",
-    );
+    if (compareOrigin === "saved" || compareOrigin === "collectionDetail") {
+      navigate(getPathForView(compareOrigin));
+      return;
+    }
+    navigate(activeSearch ? getPathForView("results") : "/");
   };
 
   const openSavedListings = () => {
     setStatus({ type: "", message: "" });
-    setCurrentView("saved");
+    navigate("/saved");
   };
 
   const returnFromSavedListings = () => {
-    setCurrentView(activeSearch ? "results" : "search");
+    navigate(activeSearch ? getPathForView("results") : "/");
   };
 
   const returnToSearch = () => {
@@ -1500,9 +1584,284 @@ function App() {
     compareListingIdsRef.current = [];
     setCompareListingIds([]);
     setCompareStatus({ type: "", message: "" });
-    setCurrentView("search");
     setStatus({ type: "", message: "" });
+    navigate("/");
   };
+
+  // Direct/refreshed-load restoration: reconstruct in-memory state from the
+  // URL for each route that supports deep linking. Each effect intentionally
+  // duplicates its fetch logic inline instead of calling a named async
+  // function, to avoid triggering the set-state-in-effect lint rule.
+  //
+  // These effects deliberately do NOT use an isMounted-guarded cleanup (the
+  // pattern used elsewhere in this file for effects with no external
+  // request-ordering signal). In dev-mode StrictMode, an effect's cleanup
+  // runs synchronously immediately after its first invocation, before any
+  // in-flight fetch has a chance to resolve -- an isMounted flag would mark
+  // that first, real fetch as stale and silently drop its result, leaving
+  // the UI stuck loading forever. Instead, each effect stores the key
+  // (URL) it last dispatched a request for in a ref, set synchronously
+  // before the request starts, and re-checks that same ref when the
+  // request resolves: since the ref is only ever overwritten by a genuinely
+  // new key (not by StrictMode's synthetic remount), this is safe against
+  // duplicate dispatches, out-of-order resolution, and the request
+  // continuing to resolve after the "owning" effect instance was cleaned up.
+  useEffect(() => {
+    if (!authUser || location.pathname !== "/results") {
+      return;
+    }
+
+    const queryFilters = parseSearchFromQuery(searchParams);
+    if (!queryFilters) {
+      return;
+    }
+
+    const restoreKey = location.pathname + location.search;
+    if (restoredResultsKeyRef.current === restoreKey) {
+      return;
+    }
+    restoredResultsKeyRef.current = restoreKey;
+
+    if (isSameSearch(queryFilters, activeSearch)) {
+      return;
+    }
+
+    const loadInitialResults = async () => {
+      setActiveSearch(queryFilters);
+      setResultsFilters({
+        ...createDefaultResultsFilters(),
+        minRent: queryFilters.minRent,
+        maxRent: queryFilters.maxRent,
+        housingType: queryFilters.housingType,
+        safetyLevel: "Any",
+        maxCommute: queryFilters.maxCommute,
+      });
+
+      setIsLoadingResults(true);
+      setResultsError("");
+
+      try {
+        const listingData = await apiRequest(
+          "/api/listings",
+          {},
+          getListingQueryParams(queryFilters),
+        );
+        if (restoredResultsKeyRef.current === restoreKey) {
+          setListings(listingData.listings || []);
+        }
+      } catch {
+        if (restoredResultsKeyRef.current === restoreKey) {
+          setListings([]);
+          setResultsError(
+            "We could not load listings right now. Please retry or edit your search.",
+          );
+        }
+      } finally {
+        if (restoredResultsKeyRef.current === restoreKey) {
+          setIsLoadingResults(false);
+        }
+      }
+    };
+
+    loadInitialResults();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(authUser), location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    const match = location.pathname.match(/^\/listings\/([^/]+)$/);
+    if (!match) {
+      return;
+    }
+
+    const listingId = match[1];
+    const restoreKey = location.pathname + location.search;
+    if (restoredListingKeyRef.current === restoreKey) {
+      return;
+    }
+    restoredListingKeyRef.current = restoreKey;
+
+    // No isMounted flag here: StrictMode's dev-only mount/cleanup/remount
+    // would set it false before the first invocation's fetch resolves,
+    // discarding a valid result. Instead we re-check the ref at each
+    // resolution point — it only changes on a genuinely new navigation.
+    const loadInitialListingDetail = async () => {
+      setSelectedListingId(listingId);
+      setSelectedListing(null);
+      setListingError("");
+      setIsLoadingListing(true);
+
+      try {
+        const listing = await apiRequest(
+          `/api/listings/${listingId}`,
+          {},
+          { campus: searchParams.get("campus") || activeSearch?.campus },
+        );
+        if (restoredListingKeyRef.current === restoreKey) {
+          setSelectedListing(listing);
+        }
+      } catch {
+        if (restoredListingKeyRef.current === restoreKey) {
+          setListingError(
+            "This listing could not be found or loaded. Please retry or return to results.",
+          );
+        }
+      } finally {
+        if (restoredListingKeyRef.current === restoreKey) {
+          setIsLoadingListing(false);
+        }
+      }
+    };
+
+    loadInitialListingDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(authUser), location.pathname]);
+
+  useEffect(() => {
+    if (!authUser || location.pathname !== "/compare") {
+      return;
+    }
+
+    const queryIds = parseCompareIdsFromQuery(searchParams);
+    if (queryIds.length === 0 || sameIdSet(queryIds, compareListingIdsRef.current)) {
+      return;
+    }
+
+    const restoreKey = location.pathname + location.search;
+    if (restoredCompareKeyRef.current === restoreKey) {
+      return;
+    }
+    restoredCompareKeyRef.current = restoreKey;
+
+    // No isMounted flag: see the /results restoration effect above for why
+    // — StrictMode's dev-only remount would discard a still-resolving fetch.
+    const loadInitialCompareListings = async () => {
+      compareListingIdsRef.current = queryIds;
+      setCompareListingIds(queryIds);
+
+      const knownIds = new Set(
+        [...listings, ...savedListings, ...directlyFetchedListings]
+          .map((listing) => getListingId(listing))
+          .filter(Boolean),
+      );
+      const missingIds = queryIds.filter((id) => !knownIds.has(id));
+
+      if (missingIds.length === 0) {
+        return;
+      }
+
+      const fetched = await Promise.all(
+        missingIds.map((id) =>
+          apiRequest(`/api/listings/${id}`, {}, {}).catch(() => null),
+        ),
+      );
+
+      if (restoredCompareKeyRef.current !== restoreKey) {
+        return;
+      }
+
+      const validFetched = fetched.filter(Boolean);
+      if (validFetched.length > 0) {
+        setDirectlyFetchedListings((current) => {
+          const merged = new Map(
+            current.map((listing) => [getListingId(listing), listing]),
+          );
+          validFetched.forEach((listing) =>
+            merged.set(getListingId(listing), listing),
+          );
+          return Array.from(merged.values());
+        });
+      }
+    };
+
+    loadInitialCompareListings();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(authUser), location.pathname, location.search]);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    if (location.pathname !== "/saved/collections") {
+      return;
+    }
+
+    const restoreKey = location.pathname;
+    if (restoredCollectionsListKeyRef.current === restoreKey) {
+      return;
+    }
+    restoredCollectionsListKeyRef.current = restoreKey;
+
+    loadCollections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(authUser), location.pathname]);
+
+  useEffect(() => {
+    if (!authUser) {
+      return;
+    }
+
+    const match = location.pathname.match(/^\/saved\/collections\/([^/]+)$/);
+    if (!match) {
+      return;
+    }
+
+    const collectionId = match[1];
+    const restoreKey = location.pathname;
+    if (restoredCollectionKeyRef.current === restoreKey) {
+      return;
+    }
+    restoredCollectionKeyRef.current = restoreKey;
+
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authToken) {
+      return;
+    }
+
+    // No isMounted flag: see the /results restoration effect above for why
+    // — StrictMode's dev-only remount would discard a still-resolving fetch.
+    const loadInitialCollectionDetail = async () => {
+      setSelectedCollectionId(collectionId);
+      setCollectionDetail(null);
+      setCollectionDetailError("");
+      setIsLoadingCollectionDetail(true);
+
+      try {
+        const data = await apiRequest(
+          `/api/collections/${collectionId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          },
+          { campus: activeSearch?.campus },
+        );
+        if (restoredCollectionKeyRef.current === restoreKey) {
+          setCollectionDetail({
+            collection: data.collection,
+            listings: data.listings || [],
+          });
+        }
+      } catch {
+        if (restoredCollectionKeyRef.current === restoreKey) {
+          setCollectionDetailError(
+            "This collection could not be loaded. Please retry or go back.",
+          );
+        }
+      } finally {
+        if (restoredCollectionKeyRef.current === restoreKey) {
+          setIsLoadingCollectionDetail(false);
+        }
+      }
+    };
+
+    loadInitialCollectionDetail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [Boolean(authUser), location.pathname]);
 
   if (isAuthChecking) {
     return (
@@ -1533,13 +1892,28 @@ function App() {
   }
 
   const displayName = authUser.name || authUser.email;
+  const isSavedSection = location.pathname.startsWith("/saved");
+  const headerView = isSavedSection ? "saved" : "other";
+  const stepKey = location.pathname.startsWith("/results")
+    ? "results"
+    : location.pathname.startsWith("/listings/")
+      ? "details"
+      : location.pathname === "/compare"
+        ? "compare"
+        : "search";
   const selectedCampus =
     campuses.find(
       (campus) => getCampusLabel(campus) === activeSearch?.campus,
     ) || null;
   const comparisonListingPool = Array.from(
     new Map(
-      [...listings, ...savedListings, ...(selectedListing ? [selectedListing] : [])]
+      [
+        ...listings,
+        ...savedListings,
+        ...directlyFetchedListings,
+        ...(collectionDetail?.listings || []),
+        ...(selectedListing ? [selectedListing] : []),
+      ]
         .filter((listing) => getListingId(listing))
         .map((listing) => [getListingId(listing), listing]),
     ).values(),
@@ -1571,17 +1945,13 @@ function App() {
   return (
     <main className="app-shell">
       <Header
-        currentView={currentView}
+        currentView={headerView}
         userName={displayName}
         onLogout={handleLogout}
         onOpenSaved={openSavedListings}
         onOpenSearch={returnToSearch}
       />
-      {currentView !== "saved" &&
-        currentView !== "collections" &&
-        currentView !== "collectionDetail" && (
-          <StepProgress currentStep={currentView} />
-        )}
+      {!isSavedSection && <StepProgress currentStep={stepKey} />}
 
       {(authStatus.message || listingActionStatus.message) && (
         <div className="app-feedback-region" aria-label="Application notifications">
@@ -1598,181 +1968,229 @@ function App() {
         </div>
       )}
 
-      {currentView === "search" && (
-        <>
-          <section className="hero-section">
-            <div className="hero-copy">
-              <h1>Compare Housing Beyond Rent</h1>
-              <p>
-                Make informed housing decisions using TTC commute times,
-                neighbourhood safety data, and listing details in one place.
-              </p>
-            </div>
-          </section>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <>
+              <section className="hero-section">
+                <div className="hero-copy">
+                  <h1>Compare Housing Beyond Rent</h1>
+                  <p>
+                    Make informed housing decisions using TTC commute times,
+                    neighbourhood safety data, and listing details in one
+                    place.
+                  </p>
+                </div>
+              </section>
 
-          <SearchForm
-            campuses={campuses}
-            formData={formData}
-            status={status}
-            isSavingPreference={isSavingPreference}
-            isSearchingListings={isLoadingResults}
-            isLoadingCampuses={isLoadingCampuses}
-            campusError={campusError}
-            validationErrors={validationErrors}
-            onFieldChange={updateField}
-            onRentChange={handleRentChange}
-            onSubmit={handleSubmit}
-            onRetryCampuses={retryCampuses}
-            recentSearches={recentSearches}
-            isLoadingRecentSearches={isLoadingRecentSearches}
-          />
+              <SearchForm
+                campuses={campuses}
+                formData={formData}
+                status={status}
+                isSavingPreference={isSavingPreference}
+                isSearchingListings={isLoadingResults}
+                isLoadingCampuses={isLoadingCampuses}
+                campusError={campusError}
+                validationErrors={validationErrors}
+                onFieldChange={updateField}
+                onRentChange={handleRentChange}
+                onSubmit={handleSubmit}
+                onRetryCampuses={retryCampuses}
+                recentSearches={recentSearches}
+                isLoadingRecentSearches={isLoadingRecentSearches}
+              />
 
-          <HelpCards />
-        </>
-      )}
-
-      {currentView === "results" && (
-        <BrowseResults
-          listings={listings}
-          search={activeSearch}
-          selectedCampus={selectedCampus}
-          filters={resultsFilters}
-          isLoading={isLoadingResults}
-          errorMessage={resultsError}
-          compareListingIds={compareListingIds}
-          compareStatus={compareStatus}
-          maxCompareListings={MAX_COMPARE_LISTINGS}
-          onCompareListing={openCompareWithListing}
-          onOpenCompare={openCompareView}
-          onClearCompareStatus={clearCompareStatus}
-          onFilterChange={handleFilterChange}
-          onClearFilters={handleClearFilters}
-          onDetails={openListingDetail}
-          onEditSearch={returnToSearch}
-          onRetry={retryResults}
-          savedListingIds={savedListingIds}
-          savingListingIds={savingListingIds}
-          onToggleSave={toggleSavedListing}
-          valueScoreWeights={valueScoreWeights}
-          onWeightChange={updateValueScoreWeight}
-          onResetWeights={resetValueScoreWeights}
-        />
-      )}
-
-      {currentView === "compare" && (
-        <CompareListings
-          listings={comparedListings}
-          availableListings={comparisonAvailableListings}
-          campus={activeSearch?.campus}
-          compareStatus={compareStatus}
-          maxCompareListings={MAX_COMPARE_LISTINGS}
-          valueScoreWeights={valueScoreWeights}
-          savedListingIds={savedListingIds}
-          savingListingIds={savingListingIds}
-          onToggleSave={toggleSavedListing}
-          onAddCompare={addListingToCompare}
-          onRemoveCompare={removeListingFromCompare}
-          onBackToResults={returnFromCompare}
-          backLabel={
-            compareOrigin === "saved"
-              ? "Back to Saved Listings"
-              : compareOrigin === "collectionDetail"
-                ? "Back to Collection"
-                : "Back to Results"
+              <HelpCards />
+            </>
           }
-          onDetails={openListingDetail}
         />
-      )}
 
-      {currentView === "saved" && (
-        <SavedListings
-          listings={savedListings}
-          campus={activeSearch?.campus}
-          isLoading={isLoadingSavedListings}
-          errorMessage={savedListingsError}
-          onDetails={openListingDetail}
-          onBack={returnFromSavedListings}
-          backLabel={activeSearch ? "Back to Results" : "Back to Search"}
-          emptyActionLabel={activeSearch ? "Browse Results" : "Start a Search"}
-          onRetry={loadSavedListings}
-          savedListingIds={savedListingIds}
-          savingListingIds={savingListingIds}
-          onToggleSave={toggleSavedListing}
-          compareListingIds={compareListingIds}
-          onCompareListing={openCompareWithListing}
-          badgesByListingId={recommendationBadgesByListingId}
-          valueScoreWeights={valueScoreWeights}
-          onOpenCollections={openCollections}
-          onAddToCollection={openCollectionPicker}
-        />
-      )}
-
-      {currentView === "collections" && (
-        <Collections
-          collections={collections}
-          isLoading={isLoadingCollections}
-          errorMessage={collectionsError}
-          actionStatus={collectionActionStatus}
-          onBack={returnFromCollections}
-          onOpenCollection={openCollectionDetail}
-          onCreateCollection={createCollection}
-          onRenameCollection={renameCollection}
-          onDeleteCollection={deleteCollection}
-          isCreating={isCreatingCollection}
-          pendingCollectionIds={pendingCollectionIds}
-        />
-      )}
-
-      {currentView === "collectionDetail" && (
-        <CollectionDetail
-          collection={collectionDetail?.collection || null}
-          listings={collectionDetail?.listings || []}
-          campus={activeSearch?.campus}
-          isLoading={isLoadingCollectionDetail}
-          errorMessage={collectionDetailError}
-          onDetails={openListingDetail}
-          onBack={returnFromCollectionDetail}
-          onRetry={retryCollectionDetail}
-          savedListingIds={savedListingIds}
-          savingListingIds={savingListingIds}
-          onToggleSave={toggleSavedListing}
-          removingListingIds={removingFromCollectionIds}
-          onRemoveFromCollection={removeListingFromCollection}
-          compareListingIds={compareListingIds}
-          onCompareListing={openCompareWithListing}
-          badgesByListingId={recommendationBadgesByListingId}
-          valueScoreWeights={valueScoreWeights}
-        />
-      )}
-
-      {currentView === "details" && (
-        <ListingDetail
-          listing={selectedListing}
-          campus={activeSearch?.campus}
-          badges={recommendationBadgesByListingId[selectedListingId] || []}
-          isLoading={isLoadingListing}
-          errorMessage={listingError}
-          onBack={returnToResults}
-          backLabel={
-            listingDetailOrigin === "compare"
-              ? "Back to Compare"
-              : listingDetailOrigin === "saved"
-                ? "Back to Saved Listings"
-                : listingDetailOrigin === "collectionDetail"
-                  ? "Back to Collection"
-                  : "Back to Results"
+        <Route
+          path="/results"
+          element={
+            <>
+              <div className="route-share-bar">
+                <CopyLinkButton label="Copy Link to This Search" />
+              </div>
+              <BrowseResults
+                listings={listings}
+                search={activeSearch}
+                selectedCampus={selectedCampus}
+                filters={resultsFilters}
+                isLoading={isLoadingResults}
+                errorMessage={resultsError}
+                compareListingIds={compareListingIds}
+                compareStatus={compareStatus}
+                maxCompareListings={MAX_COMPARE_LISTINGS}
+                onCompareListing={openCompareWithListing}
+                onOpenCompare={openCompareView}
+                onClearCompareStatus={clearCompareStatus}
+                onFilterChange={handleFilterChange}
+                onClearFilters={handleClearFilters}
+                onDetails={openListingDetail}
+                onEditSearch={returnToSearch}
+                onRetry={retryResults}
+                savedListingIds={savedListingIds}
+                savingListingIds={savingListingIds}
+                onToggleSave={toggleSavedListing}
+                valueScoreWeights={valueScoreWeights}
+                onWeightChange={updateValueScoreWeight}
+                onResetWeights={resetValueScoreWeights}
+              />
+            </>
           }
-          onRetry={retryListingDetail}
-          isSaved={savedListingIds.has(selectedListingId)}
-          isSaving={savingListingIds.has(selectedListingId)}
-          onToggleSave={toggleSavedListing}
-          isCompared={compareListingIds.includes(selectedListingId)}
-          compareCount={compareListingIds.length}
-          maxCompareListings={MAX_COMPARE_LISTINGS}
-          onCompareListing={openCompareWithListing}
-          valueScoreWeights={valueScoreWeights}
         />
-      )}
+
+        <Route
+          path="/compare"
+          element={
+            <>
+              <div className="route-share-bar">
+                <CopyLinkButton label="Copy Link to This Comparison" />
+              </div>
+              <CompareListings
+                listings={comparedListings}
+                availableListings={comparisonAvailableListings}
+                campus={activeSearch?.campus}
+                compareStatus={compareStatus}
+                maxCompareListings={MAX_COMPARE_LISTINGS}
+                valueScoreWeights={valueScoreWeights}
+                savedListingIds={savedListingIds}
+                savingListingIds={savingListingIds}
+                onToggleSave={toggleSavedListing}
+                onAddCompare={addListingToCompare}
+                onRemoveCompare={removeListingFromCompare}
+                onBackToResults={returnFromCompare}
+                backLabel={
+                  compareOrigin === "saved"
+                    ? "Back to Saved Listings"
+                    : compareOrigin === "collectionDetail"
+                      ? "Back to Collection"
+                      : "Back to Results"
+                }
+                onDetails={openListingDetail}
+              />
+            </>
+          }
+        />
+
+        <Route
+          path="/saved"
+          element={
+            <SavedListings
+              listings={savedListings}
+              campus={activeSearch?.campus}
+              isLoading={isLoadingSavedListings}
+              errorMessage={savedListingsError}
+              onDetails={openListingDetail}
+              onBack={returnFromSavedListings}
+              backLabel={activeSearch ? "Back to Results" : "Back to Search"}
+              emptyActionLabel={
+                activeSearch ? "Browse Results" : "Start a Search"
+              }
+              onRetry={loadSavedListings}
+              savedListingIds={savedListingIds}
+              savingListingIds={savingListingIds}
+              onToggleSave={toggleSavedListing}
+              compareListingIds={compareListingIds}
+              onCompareListing={openCompareWithListing}
+              badgesByListingId={recommendationBadgesByListingId}
+              valueScoreWeights={valueScoreWeights}
+              onOpenCollections={openCollections}
+              onAddToCollection={openCollectionPicker}
+            />
+          }
+        />
+
+        <Route
+          path="/saved/collections"
+          element={
+            <Collections
+              collections={collections}
+              isLoading={isLoadingCollections}
+              errorMessage={collectionsError}
+              actionStatus={collectionActionStatus}
+              onBack={returnFromCollections}
+              onOpenCollection={openCollectionDetail}
+              onCreateCollection={createCollection}
+              onRenameCollection={renameCollection}
+              onDeleteCollection={deleteCollection}
+              isCreating={isCreatingCollection}
+              pendingCollectionIds={pendingCollectionIds}
+            />
+          }
+        />
+
+        <Route
+          path="/saved/collections/:collectionId"
+          element={
+            <>
+              <div className="route-share-bar">
+                <CopyLinkButton label="Copy Link to This Collection" />
+              </div>
+              <CollectionDetail
+                collection={collectionDetail?.collection || null}
+                listings={collectionDetail?.listings || []}
+                campus={activeSearch?.campus}
+                isLoading={isLoadingCollectionDetail}
+                errorMessage={collectionDetailError}
+                onDetails={openListingDetail}
+                onBack={returnFromCollectionDetail}
+                onRetry={retryCollectionDetail}
+                savedListingIds={savedListingIds}
+                savingListingIds={savingListingIds}
+                onToggleSave={toggleSavedListing}
+                removingListingIds={removingFromCollectionIds}
+                onRemoveFromCollection={removeListingFromCollection}
+                compareListingIds={compareListingIds}
+                onCompareListing={openCompareWithListing}
+                badgesByListingId={recommendationBadgesByListingId}
+                valueScoreWeights={valueScoreWeights}
+              />
+            </>
+          }
+        />
+
+        <Route
+          path="/listings/:listingId"
+          element={
+            <>
+              <div className="route-share-bar">
+                <CopyLinkButton label="Copy Link to This Listing" />
+              </div>
+              <ListingDetail
+                listing={selectedListing}
+                campus={searchParams.get("campus") || activeSearch?.campus}
+                badges={recommendationBadgesByListingId[selectedListingId] || []}
+                isLoading={isLoadingListing}
+                errorMessage={listingError}
+                onBack={returnToResults}
+                backLabel={
+                  listingDetailOrigin === "compare"
+                    ? "Back to Compare"
+                    : listingDetailOrigin === "saved"
+                      ? "Back to Saved Listings"
+                      : listingDetailOrigin === "collectionDetail"
+                        ? "Back to Collection"
+                        : "Back to Results"
+                }
+                onRetry={retryListingDetail}
+                isSaved={savedListingIds.has(selectedListingId)}
+                isSaving={savingListingIds.has(selectedListingId)}
+                onToggleSave={toggleSavedListing}
+                isCompared={compareListingIds.includes(selectedListingId)}
+                compareCount={compareListingIds.length}
+                maxCompareListings={MAX_COMPARE_LISTINGS}
+                onCompareListing={openCompareWithListing}
+                valueScoreWeights={valueScoreWeights}
+              />
+            </>
+          }
+        />
+
+        <Route path="*" element={<NotFound />} />
+      </Routes>
 
       {collectionPickerListingId && (
         <CollectionPickerModal

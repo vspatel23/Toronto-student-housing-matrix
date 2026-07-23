@@ -1746,3 +1746,21 @@ input[type="range"]::-moz-range-thumb {
     grid-template-columns: 1fr;
   }
 }
+
+.copy-link-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.copy-link-status {
+  color: var(--color-success);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.route-share-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: var(--space-small);
+}
