@@ -1764,3 +1764,11 @@ input[type="range"]::-moz-range-thumb {
   justify-content: flex-end;
   margin-bottom: var(--space-small);
 }
+
+.collection-share-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: var(--space-small);
+}

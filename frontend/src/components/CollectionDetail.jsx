@@ -1,3 +1,4 @@
+import CopyLinkButton from "./CopyLinkButton";
 import ListingCard from "./ListingCard";
 import StatusMessage from "./StatusMessage";
 import { getListingId } from "../utils/listingFormatters";
@@ -20,16 +21,27 @@ function CollectionDetail({
   onCompareListing,
   badgesByListingId = {},
   valueScoreWeights,
+  readOnly = false,
+  isUpdatingShare = false,
+  shareActionError = "",
+  onEnableShare,
+  onDisableShare,
 }) {
   const hasListings = listings.length > 0;
+  const shareToken = collection?.shareToken || null;
+  const shareUrl = shareToken
+    ? `${window.location.origin}/shared/collections/${shareToken}`
+    : "";
 
   return (
     <section className="saved-page" aria-labelledby="collection-detail-title">
-      <nav className="saved-navigation" aria-label="Collection navigation">
-        <button type="button" className="back-button" onClick={onBack}>
-          Back to Collections
-        </button>
-      </nav>
+      {!readOnly && (
+        <nav className="saved-navigation" aria-label="Collection navigation">
+          <button type="button" className="back-button" onClick={onBack}>
+            Back to Collections
+          </button>
+        </nav>
+      )}
 
       {isLoading && !collection && (
         <div className="state-panel loading-state" role="status">
@@ -62,7 +74,9 @@ function CollectionDetail({
         <>
           <header className="saved-page-header">
             <div>
-              <p className="section-eyebrow">Collection</p>
+              <p className="section-eyebrow">
+                {readOnly ? "Shared Collection" : "Collection"}
+              </p>
               <h1 id="collection-detail-title">{collection.name}</h1>
               {collection.description && <p>{collection.description}</p>}
             </div>
@@ -72,6 +86,36 @@ function CollectionDetail({
             </span>
           </header>
 
+          {!readOnly && (
+            <div className="collection-share-controls">
+              {shareToken ? (
+                <>
+                  <CopyLinkButton label="Copy Public Link" url={shareUrl} />
+                  <button
+                    type="button"
+                    className="secondary-button"
+                    disabled={isUpdatingShare}
+                    onClick={onDisableShare}
+                  >
+                    {isUpdatingShare ? "Updating..." : "Turn off public link"}
+                  </button>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="secondary-button"
+                  disabled={isUpdatingShare}
+                  onClick={onEnableShare}
+                >
+                  {isUpdatingShare ? "Enabling..." : "Enable public link"}
+                </button>
+              )}
+              {shareActionError && (
+                <StatusMessage type="error">{shareActionError}</StatusMessage>
+              )}
+            </div>
+          )}
+
           {errorMessage && (
             <StatusMessage type="error">{errorMessage}</StatusMessage>
           )}
@@ -80,12 +124,19 @@ function CollectionDetail({
             <div className="state-panel empty-state">
               <h2>This collection is empty</h2>
               <p>
-                Add listings to this collection from Saved Listings to see
-                them here.
+                {readOnly
+                  ? "This shared collection doesn't have any listings yet."
+                  : "Add listings to this collection from Saved Listings to see them here."}
               </p>
-              <button type="button" className="details-button" onClick={onBack}>
-                Back to Collections
-              </button>
+              {!readOnly && (
+                <button
+                  type="button"
+                  className="details-button"
+                  onClick={onBack}
+                >
+                  Back to Collections
+                </button>
+              )}
             </div>
           )}
 
