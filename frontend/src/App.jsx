@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Routes, Route, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import "./App.css";
 import "./styles/ui-cleanup.css";
+import "./styles/listing-images.css";
 import {
   AUTH_TOKEN_KEY,
   AUTH_USER_KEY,
@@ -2065,6 +2066,7 @@ function App() {
         ...savedListings,
         ...directlyFetchedListings,
         ...(collectionDetail?.listings || []),
+        ...(sharedCollection?.listings || []),
         ...(selectedListing ? [selectedListing] : []),
       ]
         .filter((listing) => getListingId(listing))

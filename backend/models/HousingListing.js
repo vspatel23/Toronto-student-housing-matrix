@@ -1,4 +1,10 @@
 const mongoose = require("mongoose");
+const {
+  isAllowedListingImageSource,
+  MAX_IMAGE_ALT_LENGTH,
+  MIN_IMAGE_ALT_LENGTH,
+  prepareListingImagesForStorage,
+} = require("../utils/listingImages");
 
 const propertyTypes = [
   "Apartment",
@@ -25,6 +31,57 @@ const amenityValues = [
   "Balcony",
   "Security",
 ];
+
+const listingImageSchema = new mongoose.Schema(
+  {
+    src: {
+      type: String,
+      required: true,
+      trim: true,
+      validate: {
+        validator: isAllowedListingImageSource,
+        message:
+          "Image src must be an approved /images/listings/ path or an HTTPS URL.",
+      },
+    },
+    alt: {
+      type: String,
+      required: true,
+      trim: true,
+      minlength: MIN_IMAGE_ALT_LENGTH,
+      maxlength: MAX_IMAGE_ALT_LENGTH,
+    },
+    order: {
+      type: Number,
+      min: 0,
+      validate: {
+        validator: Number.isInteger,
+        message: "Image order must be a non-negative integer.",
+      },
+    },
+    isPrimary: {
+      type: Boolean,
+      default: false,
+    },
+    width: {
+      type: Number,
+      min: 1,
+      validate: {
+        validator: (value) => value == null || Number.isInteger(value),
+        message: "Image width must be a positive integer.",
+      },
+    },
+    height: {
+      type: Number,
+      min: 1,
+      validate: {
+        validator: (value) => value == null || Number.isInteger(value),
+        message: "Image height must be a positive integer.",
+      },
+    },
+  },
+  { _id: false },
+);
 
 const housingListingSchema = new mongoose.Schema(
   {
@@ -125,6 +182,31 @@ const housingListingSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    images: {
+      type: [listingImageSchema],
+      default: undefined,
+      validate: {
+        validator(images) {
+          if (!Array.isArray(images)) {
+            return true;
+          }
+
+          const orders = images
+            .map((image) => image.order)
+            .filter((order) => order !== undefined && order !== null);
+          const primaryCount = images.filter(
+            (image) => image.isPrimary === true,
+          ).length;
+
+          return (
+            new Set(orders).size === orders.length &&
+            primaryCount <= 1
+          );
+        },
+        message:
+          "Listing images must use unique order values and include no more than one primary image.",
+      },
+    },
     valueScore: Number,
     source: {
       type: String,
@@ -141,15 +223,26 @@ const housingListingSchema = new mongoose.Schema(
   }
 );
 
-housingListingSchema.pre("validate", function checkLocationText(next) {
+housingListingSchema.pre("validate", function normalizeImages() {
+  try {
+    if (this.images !== undefined) {
+      this.images = prepareListingImagesForStorage(this.images, {
+        context: `Listing ${this.seedId || this.title || this._id || "unknown"}`,
+      });
+    }
+  } catch (error) {
+    this.invalidate("images", error.message);
+  }
+
+});
+
+housingListingSchema.pre("validate", function checkLocationText() {
   if (!this.address && !this.neighborhood) {
     this.invalidate(
       "address",
       "A listing must include an address or neighborhood.",
     );
   }
-
-  next();
 });
 
 housingListingSchema.index({ monthlyRent: 1 });

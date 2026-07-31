@@ -1,9 +1,14 @@
+const fs = require("fs");
+const path = require("path");
 const mongoose = require("mongoose");
 require("dotenv").config();
 
 const HousingListing = require("../models/HousingListing");
+const {
+  prepareListingImagesForStorage,
+} = require("../utils/listingImages");
 
-const listings = [
+const baseListings = [
   {
     seedId: "listing-001",
     title: "Furnished Annex Room Near Bloor",
@@ -824,7 +829,152 @@ const listings = [
   },
 ];
 
-const seedListings = async () => {
+const DEMO_IMAGE_BY_PROPERTY_TYPE = {
+  Apartment: {
+    src: "/images/listings/demo/studio-01.webp",
+    alt: "Generic project-generated apartment room and kitchenette interior",
+  },
+  Basement: {
+    src: "/images/listings/demo/studio-01.webp",
+    alt: "Generic project-generated open rental room and kitchenette interior",
+  },
+  "Room Rental": {
+    src: "/images/listings/demo/student-bedroom-01.webp",
+    alt: "Generic project-generated furnished student bedroom interior",
+  },
+  "Shared House": {
+    src: "/images/listings/demo/shared-house-01.webp",
+    alt: "Generic project-generated shared student living room and kitchen",
+  },
+  Studio: {
+    src: "/images/listings/demo/studio-01.webp",
+    alt: "Generic project-generated open studio apartment interior",
+  },
+};
+
+const listings = baseListings.map((listing) => {
+  const primaryImage = DEMO_IMAGE_BY_PROPERTY_TYPE[listing.propertyType];
+  const images = [
+    {
+      ...primaryImage,
+      order: 0,
+      isPrimary: true,
+      width: 1200,
+      height: 800,
+    },
+  ];
+
+  if (listing.seedId === "listing-001") {
+    images.push({
+      src: "/images/listings/demo/shared-house-01.webp",
+      alt: "Generic project-generated shared student living room and kitchen",
+      order: 1,
+      isPrimary: false,
+      width: 1200,
+      height: 800,
+    });
+  }
+
+  return { ...listing, images };
+});
+
+const FRONTEND_PUBLIC_DIR = path.resolve(
+  __dirname,
+  "../../frontend/public",
+);
+
+const hasExpectedFileSignature = (filePath) => {
+  const extension = path.extname(filePath).toLowerCase();
+  const header = fs.readFileSync(filePath).subarray(0, 512);
+
+  if (extension === ".webp") {
+    return (
+      header.length >= 12 &&
+      header.toString("ascii", 0, 4) === "RIFF" &&
+      header.toString("ascii", 8, 12) === "WEBP"
+    );
+  }
+
+  if (extension === ".svg") {
+    return header.toString("utf8").includes("<svg");
+  }
+
+  if (extension === ".png") {
+    return header.subarray(0, 8).equals(
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+    );
+  }
+
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return header.length >= 3 && header[0] === 0xff && header[1] === 0xd8;
+  }
+
+  if (extension === ".avif") {
+    return header.length >= 12 && header.toString("ascii", 4, 12).includes("ftyp");
+  }
+
+  return false;
+};
+
+const validateSeedListings = (
+  seedListings,
+  { publicDirectory = FRONTEND_PUBLIC_DIR } = {},
+) =>
+  seedListings.map((listing) => {
+    const listingIdentity = `${listing.seedId || "unknown seed"} (${
+      listing.title || "Untitled listing"
+    })`;
+    const images = prepareListingImagesForStorage(listing.images, {
+      context: `Listing ${listingIdentity}`,
+    });
+
+    images.forEach((image, index) => {
+      if (!image.src.startsWith("/")) {
+        return;
+      }
+
+      const publicRoot = path.resolve(publicDirectory);
+      const filePath = path.resolve(publicRoot, image.src.slice(1));
+      const requiredPrefix = `${publicRoot}${path.sep}`;
+
+      if (!filePath.startsWith(requiredPrefix)) {
+        throw new Error(
+          `Listing ${listingIdentity}, image ${index} (${image.src}): path escapes the frontend public directory.`,
+        );
+      }
+
+      if (!fs.existsSync(filePath)) {
+        throw new Error(
+          `Listing ${listingIdentity}, image ${index} (${image.src}): local image file does not exist.`,
+        );
+      }
+
+      if (!fs.statSync(filePath).isFile()) {
+        throw new Error(
+          `Listing ${listingIdentity}, image ${index} (${image.src}): local image path is not a file.`,
+        );
+      }
+
+      if (!hasExpectedFileSignature(filePath)) {
+        throw new Error(
+          `Listing ${listingIdentity}, image ${index} (${image.src}): file contents do not match the extension.`,
+        );
+      }
+    });
+
+    return { ...listing, images };
+  });
+
+const seedListings = async ({ validateOnly = false } = {}) => {
+  const validatedListings = validateSeedListings(listings);
+
+  if (validateOnly) {
+    console.log(
+      `Validated image metadata and local assets for ${validatedListings.length} housing listings.`,
+    );
+    return;
+  }
+
   const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
   if (!mongoUri) {
@@ -841,13 +991,14 @@ const seedListings = async () => {
     "commuteEstimates",
     "nearestTransit",
     "valueScore",
+    "images",
   ];
 
   try {
     await mongoose.connect(mongoUri);
     console.log("Connected to MongoDB");
 
-    for (const listing of listings) {
+    for (const listing of validatedListings) {
       const unset = {};
 
       optionalFields.forEach((field) => {
@@ -870,7 +1021,7 @@ const seedListings = async () => {
     }
 
     console.log(
-      `Seeded ${listings.length} housing listings: ${inserted} inserted, ${updated} updated.`,
+      `Seeded ${validatedListings.length} housing listings: ${inserted} inserted, ${updated} updated.`,
     );
   } catch (error) {
     console.error("Failed to seed housing listings:", error.message);
@@ -881,4 +1032,15 @@ const seedListings = async () => {
   }
 };
 
-seedListings();
+if (require.main === module) {
+  seedListings({
+    validateOnly: process.argv.includes("--validate-only"),
+  });
+}
+
+module.exports = {
+  FRONTEND_PUBLIC_DIR,
+  listings,
+  seedListings,
+  validateSeedListings,
+};

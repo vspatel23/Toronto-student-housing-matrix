@@ -1,0 +1,38 @@
+{
+  "schemaVersion": 1,
+  "policy": "Only generated, licensed, authorized, or explicitly approved project assets may be used for listing images.",
+  "assets": [
+    {
+      "path": "/images/listings/fallback/property-placeholder.svg",
+      "type": "original-project-svg",
+      "source": "Created specifically for Toronto Student Housing Matrix",
+      "width": 1200,
+      "height": 800,
+      "notes": "Original interface fallback; not a property photograph."
+    },
+    {
+      "path": "/images/listings/demo/student-bedroom-01.webp",
+      "type": "project-generated-demo",
+      "source": "Generated specifically for this course project with the built-in image generation tool",
+      "width": 1200,
+      "height": 800,
+      "notes": "Generic demo imagery; not a verified photograph of any real property or listing."
+    },
+    {
+      "path": "/images/listings/demo/studio-01.webp",
+      "type": "project-generated-demo",
+      "source": "Generated specifically for this course project with the built-in image generation tool",
+      "width": 1200,
+      "height": 800,
+      "notes": "Generic demo imagery; not a verified photograph of any real property or listing."
+    },
+    {
+      "path": "/images/listings/demo/shared-house-01.webp",
+      "type": "project-generated-demo",
+      "source": "Generated specifically for this course project with the built-in image generation tool",
+      "width": 1200,
+      "height": 800,
+      "notes": "Generic demo imagery; not a verified photograph of any real property or listing."
+    }
+  ]
+}

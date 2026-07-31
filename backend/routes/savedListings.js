@@ -5,14 +5,15 @@ const authenticateUser = require("../middleware/auth");
 const SavedListing = require("../models/SavedListing");
 const HousingListing = require("../models/HousingListing");
 const {
+  LISTING_FIELDS,
+  serializeListingImages,
+} = require("../utils/listingImages");
+const {
   calculateValueScore,
   calculateValueScoreBreakdown,
 } = require("../utils/valueScore");
 
 const router = express.Router();
-
-const LISTING_FIELDS =
-  "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities valueScore source isActive";
 
 router.use(authenticateUser);
 
@@ -97,7 +98,7 @@ router.get("/", async (req, res) => {
     const listings = savedListings
       .filter((saved) => saved.listingId)
       .map((saved) => {
-        const listingObject = saved.listingId.toObject();
+        const listingObject = serializeListingImages(saved.listingId);
 
         return {
           ...listingObject,
