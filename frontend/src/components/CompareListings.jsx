@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import ListingBadges from "./ListingBadges";
+import ListingImage from "./ListingImage";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -247,6 +248,11 @@ function ComparePicker({
                     }
                   }}
                 >
+                  <ListingImage
+                    listing={listing}
+                    variant="thumbnail"
+                    className="compare-picker-image"
+                  />
                   <span>
                     <strong>{getListingTitle(listing)}</strong>
                     <small>{getLocationLabel(listing)}</small>
@@ -293,6 +299,11 @@ function CompareMobileCard({
         isStrongest ? "best-match" : "alternative-match"
       }`}
     >
+      <ListingImage
+        listing={listing}
+        variant="thumbnail"
+        className="compare-mobile-image"
+      />
       <ListingBadges badges={badges} />
       {isStrongest && (
         <span className="best-value-label">Highest Value Score</span>
@@ -603,6 +614,11 @@ function CompareListings({
                         </span>
                       )}
                     </div>
+                    <ListingImage
+                      listing={listing}
+                      variant="thumbnail"
+                      className="compare-property-image"
+                    />
                     <h3>{getListingTitle(listing)}</h3>
                     <button
                       type="button"

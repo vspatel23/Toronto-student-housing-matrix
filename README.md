@@ -80,6 +80,12 @@ The backend validation does not start the Express server and does not require a 
 
 Commute validation scenarios are documented in [`docs/sprint-3-commute-validation-scenarios.md`](docs/sprint-3-commute-validation-scenarios.md). These scenarios show how commute time affects ranking, filtering, Value Score, recommendations, and comparison during the Sprint 3 review.
 
+## Listing Image Assets
+
+The listing image schema, fallback behavior, asset conventions, seed workflow,
+and source policy are documented in
+[`docs/listing-images.md`](docs/listing-images.md).
+
 ## Deployment Notes
 
 The production frontend is deployed on Vercel:

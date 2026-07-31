@@ -1,4 +1,5 @@
 import ListingBadges from "./ListingBadges";
+import ListingImage from "./ListingImage";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -122,6 +123,12 @@ function ListingDetail({
 
       {!isLoading && !errorMessage && listing && (
         <article className="detail-content">
+          <ListingImage
+            listing={listing}
+            variant="detail"
+            className="detail-primary-image"
+          />
+
           <header className="detail-overview">
             <div className="detail-identity">
               <ListingBadges badges={badges} />

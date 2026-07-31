@@ -6,14 +6,15 @@ const authenticateUser = require("../middleware/auth");
 const Collection = require("../models/Collection");
 const HousingListing = require("../models/HousingListing");
 const {
+  LISTING_FIELDS,
+  serializeListingImages,
+} = require("../utils/listingImages");
+const {
   calculateValueScore,
   calculateValueScoreBreakdown,
 } = require("../utils/valueScore");
 
 const router = express.Router();
-
-const LISTING_FIELDS =
-  "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities valueScore source isActive";
 
 const MAX_NAME_LENGTH = 80;
 const MAX_DESCRIPTION_LENGTH = 300;
@@ -81,7 +82,7 @@ router.get("/shared/:token", async (req, res) => {
     const listings = collection.listingIds
       .filter(Boolean)
       .map((listing) => {
-        const listingObject = listing.toObject();
+        const listingObject = serializeListingImages(listing);
 
         return {
           ...listingObject,
@@ -203,7 +204,7 @@ router.get("/:id", async (req, res) => {
     const listings = collection.listingIds
       .filter(Boolean)
       .map((listing) => {
-        const listingObject = listing.toObject();
+        const listingObject = serializeListingImages(listing);
 
         return {
           ...listingObject,

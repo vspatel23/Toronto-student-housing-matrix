@@ -3,6 +3,10 @@ const mongoose = require("mongoose");
 const router = express.Router();
 const HousingListing = require("../models/HousingListing");
 const {
+  LISTING_FIELDS,
+  serializeListingImages,
+} = require("../utils/listingImages");
+const {
   calculateValueScore,
   calculateValueScoreBreakdown,
 } = require("../utils/valueScore");
@@ -61,13 +65,11 @@ router.get("/", async (req, res) => {
       }
     }
 
-    const listings = await HousingListing.find(filter).select(
-      "_id title address neighborhood postalCode description monthlyRent propertyType bedrooms bathrooms furnished location safety commuteEstimates nearestTransit amenities valueScore source isActive",
-    );
+    const listings = await HousingListing.find(filter).select(LISTING_FIELDS);
 
     const scoredListings = listings
       .map((listing) => {
-        const listingObject = listing.toObject();
+        const listingObject = serializeListingImages(listing);
 
         return {
           ...listingObject,
@@ -121,7 +123,7 @@ router.get("/:id", async (req, res) => {
       return res.status(404).json({ message: "Listing not found" });
     }
 
-    const listingObject = listing.toObject();
+    const listingObject = serializeListingImages(listing);
     res.json({
       ...listingObject,
       valueScore: calculateValueScore(listingObject, req.query.campus),

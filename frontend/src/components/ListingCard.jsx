@@ -1,4 +1,5 @@
 import ListingBadges from "./ListingBadges";
+import ListingImage from "./ListingImage";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -99,150 +100,168 @@ function ListingCard({
       onKeyDown={isSelectable ? handleCardKeyDown : undefined}
       tabIndex={isSelectable ? 0 : undefined}
     >
-      <div className="listing-card-badge-row">
-        <ListingBadges badges={badges} />
-        {isCompared && (
-          <span className="comparison-state-badge">Selected to compare</span>
-        )}
-      </div>
+      <ListingImage listing={listing} variant="card" />
 
-      <header className="listing-card-heading">
-        <div className="listing-title-group">
-          <h3>{listingTitle}</h3>
-          <p className="listing-location">{location}</p>
-        </div>
-        <div
-          className="score-badge"
-          aria-label={`Value Score ${valueScore} out of 100`}
-        >
-          <span>Value Score</span>
-          <strong>{valueScore}</strong>
-          <small>/100</small>
-        </div>
-      </header>
-
-      <div className="listing-price-row">
-        <p className="listing-rent">
-          {formatRent(listing?.monthlyRent ?? listing?.rent)}
-        </p>
-        {propertyType !== DATA_UNAVAILABLE && (
-          <span className="type-badge">{propertyType}</span>
-        )}
-      </div>
-
-      <dl className="listing-facts">
-        <div>
-          <dt>Commute</dt>
-          <dd>{formatCommute(listing, campus)}</dd>
-        </div>
-        <div>
-          <dt>Safety</dt>
-          <dd>
-            <span className={`safety-badge ${safetyClass}`}>{safetyLabel}</span>
-          </dd>
-        </div>
-        <div>
-          <dt>Furnishing</dt>
-          <dd>{formatFurnishedStatus(listing?.furnished)}</dd>
-        </div>
-      </dl>
-
-      <div className="listing-amenities">
-        <span className="listing-card-label">Key amenities</span>
-        {visibleAmenities.length > 0 ? (
-          <ul className="chip-list" aria-label="Key amenities">
-            {visibleAmenities.map((amenity) => (
-              <li key={amenity}>{amenity}</li>
-            ))}
-            {hiddenAmenityCount > 0 && (
-              <li className="amenity-more">+{hiddenAmenityCount} more</li>
+      <div className="listing-card-content">
+        <div className="listing-card-main">
+          <div className="listing-card-badge-row">
+            <ListingBadges badges={badges} />
+            {isCompared && (
+              <span className="comparison-state-badge">
+                Selected to compare
+              </span>
             )}
-          </ul>
-        ) : (
-          <p className="unavailable-data">Amenities not provided</p>
-        )}
-      </div>
+          </div>
 
-      {hasValue(listing?.description) && (
-        <p className="listing-description">{listing.description}</p>
-      )}
+          <header className="listing-card-heading">
+            <div className="listing-title-group">
+              <h3>{listingTitle}</h3>
+              <p className="listing-location">{location}</p>
+            </div>
+          </header>
 
-      <footer className="listing-card-actions">
-        <button
-          type="button"
-          className="details-button"
-          disabled={!listingId}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDetails?.(listingId);
-          }}
+          <dl className="listing-facts">
+            <div>
+              <dt>Commute</dt>
+              <dd>{formatCommute(listing, campus)}</dd>
+            </div>
+            <div>
+              <dt>Safety</dt>
+              <dd>
+                <span className={`safety-badge ${safetyClass}`}>
+                  {safetyLabel}
+                </span>
+              </dd>
+            </div>
+            <div>
+              <dt>Furnishing</dt>
+              <dd>{formatFurnishedStatus(listing?.furnished)}</dd>
+            </div>
+          </dl>
+
+          <div className="listing-amenities">
+            <span className="listing-card-label">Key amenities</span>
+            {visibleAmenities.length > 0 ? (
+              <ul className="chip-list" aria-label="Key amenities">
+                {visibleAmenities.map((amenity) => (
+                  <li key={amenity}>{amenity}</li>
+                ))}
+                {hiddenAmenityCount > 0 && (
+                  <li className="amenity-more">+{hiddenAmenityCount} more</li>
+                )}
+              </ul>
+            ) : (
+              <p className="unavailable-data">Amenities not provided</p>
+            )}
+          </div>
+
+          {hasValue(listing?.description) && (
+            <p className="listing-description">{listing.description}</p>
+          )}
+        </div>
+
+        <aside
+          className="listing-card-side"
+          aria-label={`${listingTitle} price, score, and actions`}
         >
-          View Details
-        </button>
-        {onCompareListing && (
-          <button
-            type="button"
-            className={`secondary-button compare-toggle-button${
-              isCompared ? " selected" : ""
-            }`}
-            disabled={!listingId}
-            aria-pressed={isCompared}
-            onClick={(event) => {
-              event.stopPropagation();
-              onCompareListing(listingId);
-            }}
+          <div
+            className="score-badge"
+            aria-label={`Value Score ${valueScore} out of 100`}
           >
-            {isCompared ? "View comparison" : "Compare"}
-          </button>
-        )}
-        {onToggleSave && (
-          <button
-            type="button"
-            className={`save-toggle-button${isSaved ? " saved" : ""}`}
-            disabled={!listingId || isSaving}
-            aria-pressed={isSaved}
-            aria-label={
-              isSaving
-                ? "Updating saved listing"
-                : isSaved
-                  ? "Remove listing from saved listings"
-                  : "Save listing"
-            }
-            onClick={(event) => {
-              event.stopPropagation();
-              onToggleSave(listingId);
-            }}
-          >
-            {isSaving ? savingLabel : isSaved ? savedLabel : saveLabel}
-          </button>
-        )}
-        {onAddToCollection && (
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!listingId}
-            onClick={(event) => {
-              event.stopPropagation();
-              onAddToCollection(listingId);
-            }}
-          >
-            Add to Collection
-          </button>
-        )}
-        {onRemoveFromCollection && (
-          <button
-            type="button"
-            className="secondary-button"
-            disabled={!listingId || isRemovingFromCollection}
-            onClick={(event) => {
-              event.stopPropagation();
-              onRemoveFromCollection(listingId);
-            }}
-          >
-            {isRemovingFromCollection ? "Removing..." : "Remove from Collection"}
-          </button>
-        )}
-      </footer>
+            <span>Value Score</span>
+            <strong>{valueScore}</strong>
+            <small>/100</small>
+          </div>
+
+          <div className="listing-price-row">
+            <p className="listing-rent">
+              {formatRent(listing?.monthlyRent ?? listing?.rent)}
+            </p>
+            {propertyType !== DATA_UNAVAILABLE && (
+              <span className="type-badge">{propertyType}</span>
+            )}
+          </div>
+
+          <footer className="listing-card-actions">
+            <button
+              type="button"
+              className="details-button"
+              disabled={!listingId}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDetails?.(listingId);
+              }}
+            >
+              View Details
+            </button>
+            {onCompareListing && (
+              <button
+                type="button"
+                className={`secondary-button compare-toggle-button${
+                  isCompared ? " selected" : ""
+                }`}
+                disabled={!listingId}
+                aria-pressed={isCompared}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onCompareListing(listingId);
+                }}
+              >
+                {isCompared ? "View comparison" : "Compare"}
+              </button>
+            )}
+            {onToggleSave && (
+              <button
+                type="button"
+                className={`save-toggle-button${isSaved ? " saved" : ""}`}
+                disabled={!listingId || isSaving}
+                aria-pressed={isSaved}
+                aria-label={
+                  isSaving
+                    ? "Updating saved listing"
+                    : isSaved
+                      ? "Remove listing from saved listings"
+                      : "Save listing"
+                }
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onToggleSave(listingId);
+                }}
+              >
+                {isSaving ? savingLabel : isSaved ? savedLabel : saveLabel}
+              </button>
+            )}
+            {onAddToCollection && (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={!listingId}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onAddToCollection(listingId);
+                }}
+              >
+                Add to Collection
+              </button>
+            )}
+            {onRemoveFromCollection && (
+              <button
+                type="button"
+                className="secondary-button"
+                disabled={!listingId || isRemovingFromCollection}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  onRemoveFromCollection(listingId);
+                }}
+              >
+                {isRemovingFromCollection
+                  ? "Removing..."
+                  : "Remove from Collection"}
+              </button>
+            )}
+          </footer>
+        </aside>
+      </div>
     </article>
   );
 }
