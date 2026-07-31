@@ -1,5 +1,5 @@
 import ListingBadges from "./ListingBadges";
-import ListingImage from "./ListingImage";
+import ListingImageGallery from "./ListingImageGallery";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -123,10 +123,9 @@ function ListingDetail({
 
       {!isLoading && !errorMessage && listing && (
         <article className="detail-content">
-          <ListingImage
+          <ListingImageGallery
+            key={listingId || listingTitle}
             listing={listing}
-            variant="detail"
-            className="detail-primary-image"
           />
 
           <header className="detail-overview">

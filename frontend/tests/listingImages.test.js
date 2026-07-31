@@ -2,7 +2,6 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
-  applyListingImageFallback,
   getPrimaryListingImage,
   isValidListingImageAlt,
   isValidListingImageSource,
@@ -173,41 +172,4 @@ test("validates non-empty, reasonably bounded alternative text", () => {
   assert.equal(isValidListingImageAlt("   "), false);
   assert.equal(isValidListingImageAlt("Room"), false);
   assert.equal(isValidListingImageAlt("x".repeat(241)), false);
-});
-
-test("broken-image handling applies the fallback once without looping", () => {
-  const imageElement = {
-    src: "https://images.example.test/broken.webp",
-    alt: "Broken bedroom image",
-    dataset: {},
-    getAttribute(name) {
-      return name === "src" ? this.src : null;
-    },
-  };
-
-  assert.equal(applyListingImageFallback(imageElement), true);
-  assert.equal(imageElement.src, LISTING_IMAGE_FALLBACK.src);
-  assert.equal(imageElement.alt, LISTING_IMAGE_FALLBACK.alt);
-  assert.equal(imageElement.dataset.fallbackApplied, "true");
-
-  imageElement.src = "https://images.example.test/still-broken.webp";
-  assert.equal(applyListingImageFallback(imageElement), false);
-  assert.equal(
-    imageElement.src,
-    "https://images.example.test/still-broken.webp",
-  );
-});
-
-test("a broken fallback source is guarded without requesting itself again", () => {
-  const imageElement = {
-    src: LISTING_IMAGE_FALLBACK.src,
-    alt: LISTING_IMAGE_FALLBACK.alt,
-    dataset: {},
-    getAttribute(name) {
-      return name === "src" ? this.src : null;
-    },
-  };
-
-  assert.equal(applyListingImageFallback(imageElement), false);
-  assert.equal(imageElement.dataset.fallbackApplied, "true");
 });

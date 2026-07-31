@@ -829,51 +829,47 @@ const baseListings = [
   },
 ];
 
-const DEMO_IMAGE_BY_PROPERTY_TYPE = {
-  Apartment: {
-    src: "/images/listings/demo/studio-01.webp",
-    alt: "Generic project-generated apartment room and kitchenette interior",
-  },
-  Basement: {
-    src: "/images/listings/demo/studio-01.webp",
-    alt: "Generic project-generated open rental room and kitchenette interior",
-  },
-  "Room Rental": {
-    src: "/images/listings/demo/student-bedroom-01.webp",
-    alt: "Generic project-generated furnished student bedroom interior",
-  },
-  "Shared House": {
-    src: "/images/listings/demo/shared-house-01.webp",
-    alt: "Generic project-generated shared student living room and kitchen",
-  },
-  Studio: {
-    src: "/images/listings/demo/studio-01.webp",
-    alt: "Generic project-generated open studio apartment interior",
-  },
+const IMAGE_DESCRIPTIONS_BY_PROPERTY_TYPE = {
+  Apartment: [
+    "apartment living area",
+    "compact kitchen and dining area",
+    "rental bathroom",
+  ],
+  Basement: [
+    "basement suite living and sleeping area",
+    "compact kitchenette and dining area",
+    "basement-suite bathroom",
+  ],
+  "Room Rental": [
+    "private bedroom and study nook",
+    "furnished student bedroom",
+    "shared rental bathroom",
+  ],
+  "Shared House": [
+    "shared living room",
+    "private bedroom in the shared home",
+    "shared kitchen and dining area",
+  ],
+  Studio: [
+    "open-plan studio living area",
+    "studio sleeping and kitchenette area",
+    "studio bathroom",
+  ],
 };
 
 const listings = baseListings.map((listing) => {
-  const primaryImage = DEMO_IMAGE_BY_PROPERTY_TYPE[listing.propertyType];
-  const images = [
-    {
-      ...primaryImage,
-      order: 0,
-      isPrimary: true,
-      width: 1200,
-      height: 800,
-    },
-  ];
-
-  if (listing.seedId === "listing-001") {
-    images.push({
-      src: "/images/listings/demo/shared-house-01.webp",
-      alt: "Generic project-generated shared student living room and kitchen",
-      order: 1,
-      isPrimary: false,
-      width: 1200,
-      height: 800,
-    });
-  }
+  const imageDescriptions =
+    IMAGE_DESCRIPTIONS_BY_PROPERTY_TYPE[listing.propertyType];
+  const images = imageDescriptions.map((description, index) => ({
+    src: `/images/listings/demo/listing-variants/${listing.seedId}-${String(
+      index + 1,
+    ).padStart(2, "0")}.webp`,
+    alt: `Generic project-generated ${description} for ${listing.title} in ${listing.neighborhood}`,
+    order: index,
+    isPrimary: index === 0,
+    width: 1200,
+    height: 800,
+  }));
 
   return { ...listing, images };
 });
