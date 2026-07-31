@@ -33,6 +33,23 @@
       "width": 1200,
       "height": 800,
       "notes": "Generic demo imagery; not a verified photograph of any real property or listing."
+    },
+    {
+      "path": "/images/listings/demo/student-bathroom-01.webp",
+      "type": "project-generated-demo",
+      "source": "Generated specifically for this course project with the built-in image generation tool",
+      "width": 1200,
+      "height": 800,
+      "notes": "Generic demo imagery; not a verified photograph of any real property or listing."
+    }
+  ],
+  "generatedAssetCollections": [
+    {
+      "pathPattern": "/images/listings/demo/listing-variants/listing-###-##.webp",
+      "count": 90,
+      "source": "Independently generated with one built-in image-generation call per final asset",
+      "generationMode": "built-in image generation; 90 separate prompts; no shared source image, recoloring, or crop derivation",
+      "notes": "Three original listing-specific scenes for each of 30 seed listings; all remain fictional and are not verified property photographs."
     }
   ]
 }

@@ -1,5 +1,5 @@
 import ListingBadges from "./ListingBadges";
-import ListingImage from "./ListingImage";
+import ListingCardImageGallery from "./ListingCardImageGallery";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -100,7 +100,7 @@ function ListingCard({
       onKeyDown={isSelectable ? handleCardKeyDown : undefined}
       tabIndex={isSelectable ? 0 : undefined}
     >
-      <ListingImage listing={listing} variant="card" />
+      <ListingCardImageGallery key={listingId || listingTitle} listing={listing} />
 
       <div className="listing-card-content">
         <div className="listing-card-main">

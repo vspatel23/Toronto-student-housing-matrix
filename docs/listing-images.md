@@ -75,6 +75,33 @@ Vite serves files in `frontend/public` from the site root, so the stored URL
 must begin with `/images/...`; never store `frontend/public` or a developer
 filesystem path in `src`.
 
+## Listing Details gallery
+
+Listing Details normalizes the API image array once, preserves explicit
+`order`, selects the normalized primary image, and treats the shared fallback
+as a single gallery item when no usable images remain.
+
+- Select a thumbnail or use Previous and Next to change the current image.
+- Activate the main image to open the full-size viewer.
+- In the viewer, use `ArrowLeft` and `ArrowRight` to navigate and `Escape` to
+  close.
+- Focus moves to the viewer's Close button and returns to the main-image
+  control after closing.
+- Navigation stops at the first and final image. One-image and fallback
+  galleries therefore keep Previous and Next disabled.
+- Loading, broken-source, and fallback states retain the same reserved media
+  area to avoid layout collapse.
+
+All 30 seeded listings now have three independently generated, ordered images.
+Every listing has its own architecture, layout, furnishings, camera
+compositions, and amenity views based on its actual seed details. The shared
+fallback remains covered by normalization tests and is used for API records
+with missing or unusable image metadata.
+
+Browse-result cards expose compact Previous and Next controls plus a counter.
+These controls stop card-selection events, so changing a photo does not open
+the map selection or Listing Details unexpectedly.
+
 ## Folder and filename conventions
 
 ```text
@@ -84,8 +111,13 @@ frontend/public/images/listings/
     property-placeholder.svg
   demo/
     shared-house-01.webp
+    student-bathroom-01.webp
     student-bedroom-01.webp
     studio-01.webp
+    listing-variants/
+      listing-001-01.webp
+      ...
+      listing-030-03.webp
   <listing-slug>/
     <listing-slug>-01.webp
     <listing-slug>-02.webp
@@ -196,9 +228,18 @@ Current listing-image origins are:
 - `property-placeholder.svg`: original project interface asset created
   specifically for Toronto Student Housing Matrix.
 - `student-bedroom-01.webp`, `studio-01.webp`, and
-  `shared-house-01.webp`: generic demo illustrations generated specifically
-  for this course project with the built-in image generation tool. They are not
-  verified photographs of any real property or listing.
+  `shared-house-01.webp`: generic demo illustrations generated specifically for
+  this course project with the built-in image generation tool.
+- `student-bathroom-01.webp`: generic demo bathroom imagery generated
+  specifically for this course project with the built-in image generation
+  tool.
+- `listing-variants/*.webp`: 90 independently generated interiors—three
+  original scenes for each of 30 seed listings. Each image has its own
+  listing-specific generation prompt based on property type, furnishing,
+  neighborhood character, layout, and amenities. They are not recolors,
+  crops, or derivatives of a shared room image.
+
+These demo assets are not verified photographs of any real property or listing.
 
 The repository's older favicon, icon sprite, framework logos, and abstract hero
 graphic are not listing assets and have no documented property-image

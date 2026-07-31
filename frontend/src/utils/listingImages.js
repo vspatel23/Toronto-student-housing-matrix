@@ -8,6 +8,7 @@ const LOCAL_LISTING_IMAGE_PATTERN =
   /^\/images\/listings\/(?:[a-z0-9]+(?:-[a-z0-9]+)*\/)+[a-z0-9]+(?:-[a-z0-9]+)*\.(?:avif|jpe?g|png|svg|webp)$/;
 
 export const LISTING_IMAGE_FALLBACK = Object.freeze({
+  id: "listing-image-fallback",
   src: LISTING_IMAGE_FALLBACK_SRC,
   alt: LISTING_IMAGE_FALLBACK_ALT,
   order: 0,
@@ -59,6 +60,14 @@ const normalizeOrder = (value, fallbackOrder) => {
   return Number.isInteger(number) && number >= 0 ? number : fallbackOrder;
 };
 
+const getListingName = (listing) =>
+  normalizeString(listing?.title || listing?.name) || "this listing";
+
+const getStableImageId = (image, src, order) => {
+  const providedId = normalizeString(image?.id || image?._id);
+  return providedId || `${src}::${order}`;
+};
+
 const normalizeListingImage = (image, fallbackOrder) => {
   if (!image || typeof image !== "object") {
     return null;
@@ -79,6 +88,7 @@ const normalizeListingImage = (image, fallbackOrder) => {
   }
 
   return {
+    id: getStableImageId(image, src, normalizeOrder(image.order, fallbackOrder)),
     src,
     alt,
     order: normalizeOrder(image.order, fallbackOrder),
@@ -87,6 +97,123 @@ const normalizeListingImage = (image, fallbackOrder) => {
     height: normalizePositiveInteger(image.height),
     isFallback: image.isFallback === true,
   };
+};
+
+export const getListingImageFallback = (listing) => {
+  const listingName = getListingName(listing);
+
+  if (listingName === "this listing") {
+    return LISTING_IMAGE_FALLBACK;
+  }
+
+  return {
+    ...LISTING_IMAGE_FALLBACK,
+    alt: `No property image available for ${listingName}`,
+  };
+};
+
+export const normalizeListingImages = (listingOrImages) => {
+  const listing = Array.isArray(listingOrImages)
+    ? { images: listingOrImages }
+    : listingOrImages && typeof listingOrImages === "object"
+      ? listingOrImages
+      : {};
+  const normalizedPrimaryImage = normalizeListingImage(
+    listing.primaryImage,
+    0,
+  );
+  const normalizedImages = (Array.isArray(listing.images)
+    ? listing.images
+    : []
+  )
+    .map((image, index) => {
+      const normalizedImage = normalizeListingImage(image, index);
+      return normalizedImage
+        ? { image: normalizedImage, originalIndex: index }
+        : null;
+    })
+    .filter(Boolean)
+    .sort(
+      (firstImage, secondImage) =>
+        firstImage.image.order - secondImage.image.order ||
+        firstImage.originalIndex - secondImage.originalIndex,
+    )
+    .map(({ image }) => image);
+
+  if (
+    normalizedPrimaryImage &&
+    !normalizedPrimaryImage.isFallback &&
+    !normalizedImages.some(
+      (image) =>
+        image.src === normalizedPrimaryImage.src &&
+        image.order === normalizedPrimaryImage.order,
+    )
+  ) {
+    normalizedImages.push(normalizedPrimaryImage);
+    normalizedImages.sort(
+      (firstImage, secondImage) => firstImage.order - secondImage.order,
+    );
+  }
+
+  if (normalizedImages.length === 0) {
+    return [getListingImageFallback(listing)];
+  }
+
+  const primaryFromConvenienceField = normalizedPrimaryImage
+    ? normalizedImages.findIndex(
+        (image) =>
+          image.src === normalizedPrimaryImage.src &&
+          image.order === normalizedPrimaryImage.order,
+      )
+    : -1;
+  const firstExplicitPrimary = normalizedImages.findIndex(
+    (image) => image.isPrimary,
+  );
+  const primaryIndex =
+    primaryFromConvenienceField >= 0
+      ? primaryFromConvenienceField
+      : firstExplicitPrimary >= 0
+        ? firstExplicitPrimary
+        : 0;
+
+  return normalizedImages.map((image, index) => ({
+    ...image,
+    isPrimary: index === primaryIndex,
+  }));
+};
+
+export const getInitialListingImageIndex = (images) => {
+  if (!Array.isArray(images) || images.length === 0) {
+    return 0;
+  }
+
+  const primaryIndex = images.findIndex((image) => image?.isPrimary === true);
+  return primaryIndex >= 0 ? primaryIndex : 0;
+};
+
+export const clampListingImageIndex = (index, imageCount) => {
+  const lastIndex = Math.max(0, Number(imageCount) - 1);
+  const numericIndex = Number(index);
+
+  if (!Number.isInteger(numericIndex)) {
+    return 0;
+  }
+
+  return Math.min(Math.max(numericIndex, 0), lastIndex);
+};
+
+export const getAdjacentListingImageIndex = (
+  currentIndex,
+  direction,
+  imageCount,
+) => {
+  const safeIndex = clampListingImageIndex(currentIndex, imageCount);
+
+  if (imageCount <= 1 || ![-1, 1].includes(direction)) {
+    return safeIndex;
+  }
+
+  return clampListingImageIndex(safeIndex + direction, imageCount);
 };
 
 export const getPrimaryListingImage = (listing) => {
@@ -99,54 +226,6 @@ export const getPrimaryListingImage = (listing) => {
     return normalizedPrimaryImage;
   }
 
-  if (!Array.isArray(listing?.images)) {
-    return LISTING_IMAGE_FALLBACK;
-  }
-
-  const normalizedImages = listing.images
-    .map((image, index) => {
-      const normalizedImage = normalizeListingImage(image, index);
-      return normalizedImage
-        ? { image: normalizedImage, originalIndex: index }
-        : null;
-    })
-    .filter(Boolean)
-    .sort(
-      (firstImage, secondImage) =>
-        firstImage.image.order - secondImage.image.order ||
-        firstImage.originalIndex - secondImage.originalIndex,
-    );
-
-  if (normalizedImages.length === 0) {
-    return LISTING_IMAGE_FALLBACK;
-  }
-
-  return (
-    normalizedImages.find(({ image }) => image.isPrimary)?.image ||
-    normalizedImages[0].image
-  );
-};
-
-export const applyListingImageFallback = (imageElement) => {
-  if (
-    !imageElement ||
-    imageElement.dataset?.fallbackApplied === "true"
-  ) {
-    return false;
-  }
-
-  imageElement.dataset.fallbackApplied = "true";
-
-  const currentSource =
-    imageElement.getAttribute?.("src") || imageElement.src || "";
-  if (
-    currentSource === LISTING_IMAGE_FALLBACK.src ||
-    currentSource.endsWith(LISTING_IMAGE_FALLBACK.src)
-  ) {
-    return false;
-  }
-
-  imageElement.src = LISTING_IMAGE_FALLBACK.src;
-  imageElement.alt = LISTING_IMAGE_FALLBACK.alt;
-  return true;
+  const normalizedImages = normalizeListingImages(listing);
+  return normalizedImages[getInitialListingImageIndex(normalizedImages)];
 };

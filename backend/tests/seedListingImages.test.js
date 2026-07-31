@@ -65,7 +65,7 @@ const readWebpDimensions = (filePath) => {
   assert.fail(`${filePath} uses unsupported WebP chunk type ${chunkType}`);
 };
 
-test("all real seed listings have valid ordered primary images backed by real assets", () => {
+test("every real seed listing has a distinct ordered three-image gallery", () => {
   const validated = validateSeedListings(listings);
 
   assert.equal(validated.length, 30);
@@ -82,10 +82,10 @@ test("all real seed listings have valid ordered primary images backed by real as
   const inspectedAssets = new Map();
 
   validated.forEach((listing) => {
-    assert.ok(
-      Array.isArray(listing.images) && listing.images.length > 0,
-      `${listing.seedId} should have at least one valid image`,
-    );
+    assert.ok(Array.isArray(listing.images));
+
+    assert.equal(listing.images.length, 3);
+
     assert.equal(
       listing.images.filter((image) => image.isPrimary).length,
       1,
@@ -104,6 +104,12 @@ test("all real seed listings have valid ordered primary images backed by real as
 
     listing.images.forEach((image) => {
       assert.match(image.src, /^\/images\/listings\//);
+      assert.match(
+        image.src,
+        new RegExp(
+          `^/images/listings/demo/listing-variants/${listing.seedId}-0[1-3]\\.webp$`,
+        ),
+      );
       assert.ok(image.alt.trim().length >= 5);
 
       const filePath = path.resolve(
@@ -127,19 +133,16 @@ test("all real seed listings have valid ordered primary images backed by real as
     });
   });
 
-  assert.deepEqual(
-    [...inspectedAssets.keys()].sort(),
-    [
-      "/images/listings/demo/shared-house-01.webp",
-      "/images/listings/demo/student-bedroom-01.webp",
-      "/images/listings/demo/studio-01.webp",
-    ],
-  );
+  assert.equal(inspectedAssets.size, 90);
   assert.equal(validated[0].seedId, "listing-001");
-  assert.equal(validated[0].images.length, 2);
+  assert.equal(validated[0].images.length, 3);
   assert.deepEqual(
     validated[0].images.map((image) => image.order),
-    [0, 1],
+    [0, 1, 2],
+  );
+  assert.equal(
+    new Set(validated.map((listing) => listing.images[0].src)).size,
+    30,
   );
 });
 
