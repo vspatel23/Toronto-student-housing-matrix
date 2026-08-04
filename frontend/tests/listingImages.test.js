@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import {
+  getAccessibleListingImageAlt,
   getPrimaryListingImage,
   isValidListingImageAlt,
   isValidListingImageSource,
@@ -172,4 +173,24 @@ test("validates non-empty, reasonably bounded alternative text", () => {
   assert.equal(isValidListingImageAlt("   "), false);
   assert.equal(isValidListingImageAlt("Room"), false);
   assert.equal(isValidListingImageAlt("x".repeat(241)), false);
+});
+
+test("uses useful contextual alt text instead of filenames or missing metadata", () => {
+  const listing = { title: "Quiet Campus Studio" };
+
+  assert.equal(
+    getAccessibleListingImageAlt(
+      image({ alt: "studio-bedroom-01.webp" }),
+      listing,
+    ),
+    "Primary image for Quiet Campus Studio",
+  );
+  assert.equal(
+    getAccessibleListingImageAlt(image({ alt: undefined }), listing),
+    "Primary image for Quiet Campus Studio",
+  );
+  assert.equal(
+    getAccessibleListingImageAlt(LISTING_IMAGE_FALLBACK, listing),
+    "No property image available for Quiet Campus Studio",
+  );
 });

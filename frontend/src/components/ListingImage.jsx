@@ -1,8 +1,14 @@
-import { useState } from "react";
+import { useEffect, useReducer } from "react";
 import {
+  getAccessibleListingImageAlt,
+  getListingImageFallback,
   getPrimaryListingImage,
   LISTING_IMAGE_FALLBACK,
 } from "../utils/listingImages";
+import {
+  createListingImageState,
+  listingImageStateReducer,
+} from "../utils/listingImageState";
 
 const supportedVariants = new Set([
   "card",
@@ -20,6 +26,7 @@ function ListingImage({
   loading,
 }) {
   const image = providedImage || getPrimaryListingImage(listing);
+  const fallbackImage = getListingImageFallback(listing);
   const safeVariant = supportedVariants.has(variant) ? variant : "card";
   const loadingStrategy =
     loading ||
@@ -35,54 +42,38 @@ function ListingImage({
   ]
     .filter(Boolean)
     .join(" ");
-  const [imageState, setImageState] = useState(() => ({
-    source: image.src,
-    isLoading: true,
-    hasFailed: false,
-    fallbackUnavailable: false,
-  }));
+  const [storedImageState, dispatchImageState] = useReducer(
+    listingImageStateReducer,
+    image.src,
+    createListingImageState,
+  );
+  const imageState =
+    storedImageState.source === image.src
+      ? storedImageState
+      : createListingImageState(image.src);
 
-  if (imageState.source !== image.src) {
-    setImageState({
-      source: image.src,
-      isLoading: true,
-      hasFailed: false,
-      fallbackUnavailable: false,
-    });
-  }
+  useEffect(() => {
+    dispatchImageState({ type: "reset", source: image.src });
+  }, [image.src]);
 
-  const displayedImage = imageState.hasFailed
-    ? {
-        ...LISTING_IMAGE_FALLBACK,
-        alt: `Property image unavailable. ${image.alt}`,
-      }
-    : image;
-  const unavailableAlt = image.isFallback
-    ? image.alt
-    : `Property image unavailable. ${image.alt}`;
+  const displayedImageSource = imageState.hasFailed ? fallbackImage : image;
+  const displayedImage = {
+    ...displayedImageSource,
+    alt: getAccessibleListingImageAlt(displayedImageSource, listing, {
+      isFallback: imageState.hasFailed || displayedImageSource.isFallback,
+    }),
+  };
+  const unavailableAlt = fallbackImage.alt;
 
   const handleImageLoad = () => {
-    setImageState((current) => ({
-      ...current,
-      isLoading: false,
-    }));
+    dispatchImageState({ type: "load", source: image.src });
   };
 
   const handleImageError = () => {
-    setImageState((current) => {
-      if (current.hasFailed || image.src === LISTING_IMAGE_FALLBACK.src) {
-        return {
-          ...current,
-          isLoading: false,
-          fallbackUnavailable: true,
-        };
-      }
-
-      return {
-        ...current,
-        isLoading: true,
-        hasFailed: true,
-      };
+    dispatchImageState({
+      type: "error",
+      source: image.src,
+      isFallbackSource: image.src === LISTING_IMAGE_FALLBACK.src,
     });
   };
 

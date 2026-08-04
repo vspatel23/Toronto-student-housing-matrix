@@ -66,6 +66,7 @@ function ListingImageGallery({ listing }) {
         >
           <ListingImage
             key={currentImage.id}
+            listing={listing}
             image={currentImage}
             variant="gallery"
             className="listing-gallery__image"
@@ -128,6 +129,7 @@ function ListingImageGallery({ listing }) {
                   onClick={() => setCurrentIndex(index)}
                 >
                   <ListingImage
+                    listing={listing}
                     image={image}
                     variant="thumbnail"
                     loading="lazy"
@@ -146,6 +148,7 @@ function ListingImageGallery({ listing }) {
 
       {isViewerOpen && (
         <ListingImageViewer
+          listing={listing}
           images={images}
           currentIndex={safeIndex}
           onCurrentIndexChange={setCurrentIndex}

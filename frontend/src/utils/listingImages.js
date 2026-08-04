@@ -6,6 +6,8 @@ const MAX_ALT_LENGTH = 240;
 const MIN_ALT_LENGTH = 5;
 const LOCAL_LISTING_IMAGE_PATTERN =
   /^\/images\/listings\/(?:[a-z0-9]+(?:-[a-z0-9]+)*\/)+[a-z0-9]+(?:-[a-z0-9]+)*\.(?:avif|jpe?g|png|svg|webp)$/;
+const IMAGE_FILENAME_ALT_PATTERN =
+  /(?:^|[/\\])[^/\\]+\.(?:avif|jpe?g|png|svg|webp)(?:[?#].*)?$/i;
 
 export const LISTING_IMAGE_FALLBACK = Object.freeze({
   id: "listing-image-fallback",
@@ -110,6 +112,27 @@ export const getListingImageFallback = (listing) => {
     ...LISTING_IMAGE_FALLBACK,
     alt: `No property image available for ${listingName}`,
   };
+};
+
+export const getAccessibleListingImageAlt = (
+  image,
+  listing,
+  { isFallback = image?.isFallback === true } = {},
+) => {
+  if (isFallback) {
+    return getListingImageFallback(listing).alt;
+  }
+
+  const alt = normalizeString(image?.alt);
+
+  if (isValidListingImageAlt(alt) && !IMAGE_FILENAME_ALT_PATTERN.test(alt)) {
+    return alt;
+  }
+
+  const listingName = getListingName(listing);
+  return listingName === "this listing"
+    ? "Primary property image"
+    : `Primary image for ${listingName}`;
 };
 
 export const normalizeListingImages = (listingOrImages) => {

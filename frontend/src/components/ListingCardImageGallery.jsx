@@ -33,6 +33,7 @@ function ListingCardImageGallery({ listing }) {
     >
       <ListingImage
         key={currentImage.id}
+        listing={listing}
         image={currentImage}
         variant="card"
         className="listing-card-gallery__image"

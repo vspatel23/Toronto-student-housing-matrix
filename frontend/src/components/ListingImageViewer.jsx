@@ -14,6 +14,7 @@ const isTextEntryControl = (target) =>
   target?.isContentEditable === true;
 
 function ListingImageViewer({
+  listing,
   images,
   currentIndex,
   onCurrentIndexChange,
@@ -175,6 +176,7 @@ function ListingImageViewer({
 
           <ListingImage
             key={currentImage.id}
+            listing={listing}
             image={currentImage}
             variant="viewer"
             className="listing-image-viewer__image"
