@@ -29,6 +29,7 @@ function ListingCardImageGallery({ listing }) {
   return (
     <div
       className="listing-card-gallery"
+      role="group"
       aria-label={`Property images for ${listingTitle}`}
     >
       <ListingImage

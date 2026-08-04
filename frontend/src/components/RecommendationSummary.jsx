@@ -163,14 +163,16 @@ function RecommendationSummary({ listings, campus, valueScoreWeights }) {
         <p className="recommendation-summary-copy">
           Highest-ranked option using your current Value Score priorities.
         </p>
-        <strong className="recommendation-reasons-label">
-          Why it stands out
-        </strong>
-        <ul className="recommendation-reasons">
-          {reasons.map((reason) => (
-            <li key={reason}>{reason}</li>
-          ))}
-        </ul>
+        <div className="recommendation-reasons-group">
+          <strong className="recommendation-reasons-label">
+            Why it stands out
+          </strong>
+          <ul className="recommendation-reasons">
+            {reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
       </div>
     </section>
   );

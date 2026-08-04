@@ -68,6 +68,9 @@ let BrowseResults;
 let SavedListings;
 let CompareListings;
 let CollectionDetail;
+let Collections;
+let ListingCardImageGallery;
+let RecommendationSummary;
 
 before(async () => {
   globalThis.window = { location: { origin: "http://localhost:5173" } };
@@ -115,6 +118,15 @@ before(async () => {
   ));
   ({ default: CollectionDetail } = await viteServer.ssrLoadModule(
     "/src/components/CollectionDetail.jsx",
+  ));
+  ({ default: Collections } = await viteServer.ssrLoadModule(
+    "/src/components/Collections.jsx",
+  ));
+  ({ default: ListingCardImageGallery } = await viteServer.ssrLoadModule(
+    "/src/components/ListingCardImageGallery.jsx",
+  ));
+  ({ default: RecommendationSummary } = await viteServer.ssrLoadModule(
+    "/src/components/RecommendationSummary.jsx",
   ));
 });
 
@@ -201,6 +213,65 @@ test("listing card retains Details, Save, Compare, and collection actions beside
     "Add to Collection",
     "Remove from Collection",
   ].forEach((label) => assert.match(markup, new RegExp(`>${label}<`)));
+});
+
+test("card gallery exposes its image controls as one accessible group", () => {
+  const markup = renderToStaticMarkup(
+    React.createElement(ListingCardImageGallery, {
+      listing: createListing(),
+    }),
+  );
+
+  assert.match(
+    markup,
+    /class="listing-card-gallery" role="group" aria-label="Property images for Bright Annex Studio"/,
+  );
+  assert.match(markup, /aria-label="Previous image for Bright Annex Studio"/);
+  assert.match(markup, /aria-label="Next image for Bright Annex Studio"/);
+});
+
+test("recommendation copy and reasons render in explicit alignment groups", () => {
+  const markup = renderToStaticMarkup(
+    React.createElement(RecommendationSummary, {
+      listings: [createListing()],
+    }),
+  );
+
+  assert.match(
+    markup,
+    /recommendation-summary-body[\s\S]*recommendation-summary-copy[\s\S]*recommendation-reasons-group[\s\S]*recommendation-reasons-label[\s\S]*recommendation-reasons/,
+  );
+  assert.match(markup, />Why it stands out</);
+});
+
+test("collection cards use a dedicated Open button beside aligned management actions", () => {
+  const markup = renderToStaticMarkup(
+    React.createElement(Collections, {
+      collections: [
+        {
+          _id: "collection-001",
+          name: "Campus shortlist",
+          description: "Options near campus",
+          listingCount: 1,
+          previewTitle: "Bright Annex Studio",
+        },
+      ],
+      isLoading: false,
+      errorMessage: "",
+      onBack: noop,
+      onOpenCollection: noop,
+      onCreateCollection: noop,
+      onRenameCollection: noop,
+      onDeleteCollection: noop,
+      pendingCollectionIds: new Set(),
+    }),
+  );
+
+  assert.match(markup, /<article class="collection-card">/);
+  assert.doesNotMatch(markup, /<article[^>]*role="button"/);
+  assert.match(markup, /aria-label="Open Campus shortlist"[^>]*>Open</);
+  assert.match(markup, />Rename</);
+  assert.match(markup, />Delete</);
 });
 
 test("Browse and Saved Listings render the same normalized primary image", () => {

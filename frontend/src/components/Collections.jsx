@@ -62,20 +62,17 @@ function CollectionCard({
     collection.description || "",
   );
 
-  const startEditing = (event) => {
-    event.stopPropagation();
+  const startEditing = () => {
     setEditName(collection.name);
     setEditDescription(collection.description || "");
     setIsEditing(true);
   };
 
-  const cancelEditing = (event) => {
-    event.stopPropagation();
+  const cancelEditing = () => {
     setIsEditing(false);
   };
 
-  const saveEditing = (event) => {
-    event.stopPropagation();
+  const saveEditing = () => {
     const trimmedName = editName.trim();
     if (!trimmedName) {
       return;
@@ -89,7 +86,11 @@ function CollectionCard({
 
   if (isEditing) {
     return (
-      <div className="collection-card" role="group" aria-label="Edit collection">
+      <div
+        className="collection-card collection-card--editing"
+        role="group"
+        aria-label="Edit collection"
+      >
         <input
           type="text"
           value={editName}
@@ -127,18 +128,7 @@ function CollectionCard({
   }
 
   return (
-    <article
-      className="collection-card"
-      role="button"
-      tabIndex={0}
-      onClick={() => onOpen(collection._id)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onOpen(collection._id);
-        }
-      }}
-    >
+    <article className="collection-card">
       <div className="collection-card-preview">
         {collection.previewTitle || "No listings yet"}
       </div>
@@ -151,11 +141,21 @@ function CollectionCard({
         </span>
       </div>
 
-      {collection.description && (
-        <p className="collection-card-description">{collection.description}</p>
-      )}
+      <div className="collection-card-copy">
+        {collection.description && (
+          <p className="collection-card-description">{collection.description}</p>
+        )}
+      </div>
 
       <div className="collection-card-actions">
+        <button
+          type="button"
+          className="button button-primary button-small collection-card-open"
+          aria-label={`Open ${collection.name}`}
+          onClick={() => onOpen(collection._id)}
+        >
+          Open
+        </button>
         <button
           type="button"
           className="button button-secondary button-small"
@@ -167,10 +167,7 @@ function CollectionCard({
           type="button"
           className="button button-danger-ghost button-small"
           disabled={isPending}
-          onClick={(event) => {
-            event.stopPropagation();
-            onDelete(collection._id);
-          }}
+          onClick={() => onDelete(collection._id)}
         >
           Delete
         </button>
@@ -200,7 +197,7 @@ function Collections({
 
   return (
     <section className="collections-page" aria-labelledby="collections-title">
-      <nav aria-label="Collections navigation">
+      <nav className="saved-navigation" aria-label="Collections navigation">
         <button type="button" className="back-button" onClick={onBack}>
           Back to Saved Listings
         </button>
