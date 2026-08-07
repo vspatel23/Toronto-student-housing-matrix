@@ -1,6 +1,7 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const router = express.Router();
+const { PROPERTY_TYPE_VALUES } = require("../constants/housingFilters");
 const HousingListing = require("../models/HousingListing");
 const {
   LISTING_FIELDS,
@@ -10,14 +11,6 @@ const {
   calculateValueScore,
   calculateValueScoreBreakdown,
 } = require("../utils/valueScore");
-
-const propertyTypes = [
-  "Apartment",
-  "Shared House",
-  "Studio",
-  "Basement",
-  "Room Rental",
-];
 
 const safetyLevelMap = {
   "Medium+": ["Low", "Medium"],
@@ -48,7 +41,7 @@ router.get("/", async (req, res) => {
 
     if (
       req.query.propertyType &&
-      propertyTypes.includes(req.query.propertyType)
+      PROPERTY_TYPE_VALUES.includes(req.query.propertyType)
     ) {
       filter.propertyType = req.query.propertyType;
     }

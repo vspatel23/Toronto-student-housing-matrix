@@ -1,10 +1,10 @@
 const express = require("express");
 
+const { SAFETY_FILTER_VALUES } = require("../constants/housingFilters");
 const authenticateUser = require("../middleware/auth");
 const SavedPreference = require("../models/SavedPreference");
 
 const router = express.Router();
-const SAFETY_LEVELS = ["Any", "Medium+", "High Only"];
 
 const getAuthenticatedUserId = (req, res) => {
   const userId = req.user?._id;
@@ -58,7 +58,7 @@ const buildPreferencePayload = (req, errors, userId) => {
     errors.push("maxRent should not be below minRent");
   }
 
-  if (!SAFETY_LEVELS.includes(safetyLevel)) {
+  if (!SAFETY_FILTER_VALUES.includes(safetyLevel)) {
     errors.push("safetyLevel should be one of: Any, Medium+, High Only");
   }
 
