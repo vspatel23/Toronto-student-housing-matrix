@@ -10,6 +10,7 @@ const campusRoutes = require("./routes/campuses");
 const analyticsRoutes = require("./routes/analytics");
 const savedListingsRoutes = require("./routes/savedListings");
 const collectionsRoutes = require("./routes/collections");
+const aiSearchRoutes = require("./routes/aiSearch");
 
 const app = express();
 
@@ -56,6 +57,7 @@ app.use(
   }),
 );
 app.use(express.json());
+app.use("/api/ai", aiSearchRoutes.handleAiSearchJsonBodyError);
 
 app.use("/api/auth", authRoutes);
 app.use("/api/preferences", preferenceRoutes);
@@ -64,6 +66,7 @@ app.use("/api/campuses", campusRoutes);
 app.use("/api/analytics", analyticsRoutes);
 app.use("/api/saved-listings", savedListingsRoutes);
 app.use("/api/collections", collectionsRoutes);
+app.use("/api/ai", aiSearchRoutes);
 
 app.get("/", (req, res) => {
   res.json({

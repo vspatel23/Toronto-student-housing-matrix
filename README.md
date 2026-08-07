@@ -68,10 +68,83 @@ your environment).
 
 The reusable housing-filter validator rejects unknown top-level fields and
 invalid supported values. OpenRouter output is parsed as JSON and must pass
-this application-side validator before future routes can use it.
+this application-side validator before an API route can use it.
 
 Never commit `backend/.env`. Keep the OpenRouter key out of frontend variables,
 Vite source code, logs, tests, and API responses.
+
+### Natural-language housing search API
+
+Issue #60 exposes the Issue #59 AI infrastructure through:
+
+```http
+POST /api/ai/search
+Content-Type: application/json
+```
+
+The JSON body must contain only a string `description`:
+
+```json
+{
+  "description": "I want a furnished apartment near Toronto Metropolitan University between $1200 and $1800, within 30 minutes, with WiFi and Laundry."
+}
+```
+
+Leading and trailing whitespace is removed. The trimmed description must not be
+empty or exceed 1,500 characters. A successful response contains only the
+normalized Issue #59 housing-filter representation:
+
+```json
+{
+  "success": true,
+  "filters": {
+    "campus": "Toronto Metropolitan University",
+    "minRent": 1200,
+    "maxRent": 1800,
+    "housingType": "Apartment",
+    "maxCommute": 30,
+    "safetyLevel": null,
+    "furnished": "Furnished",
+    "amenities": ["WiFi", "Laundry"]
+  }
+}
+```
+
+Errors use one safe envelope:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_DESCRIPTION",
+    "message": "Housing description is required."
+  }
+}
+```
+
+| HTTP status | Error code | Common safe message |
+| --- | --- | --- |
+| `400` | `INVALID_DESCRIPTION` | `Housing description is required.` |
+| `400` | `DESCRIPTION_TOO_LONG` | `Housing description must not exceed 1500 characters.` |
+| `502` | `AI_OUTPUT_INVALID` | `AI service returned an invalid response.` |
+| `503` | `AI_NOT_CONFIGURED` | `AI service is not configured.` |
+| `503` | `AI_CONFIGURATION_INVALID` | `AI service configuration is invalid.` |
+| `503` | `AI_SERVICE_UNAVAILABLE` | `AI service is temporarily unavailable.` |
+| `504` | `AI_SERVICE_TIMEOUT` | `AI service request timed out.` |
+
+Malformed JSON also uses `INVALID_DESCRIPTION`; parser-size failures use
+`DESCRIPTION_TOO_LONG`. Both return the same JSON error envelope without a
+stack trace.
+
+The endpoint uses the backend-only OpenRouter configuration, prompt, error
+types, and strict application-side filter validator established by Issue #59.
+Unsupported criteria are omitted; a description with no supported criteria can
+produce all `null` scalar filters and an empty `amenities` array. Invalid or
+invented provider fields reject the provider output and are never returned.
+This endpoint only translates text into filters. It does not query, create,
+modify, recommend, or invent housing listings. Existing manual searches remain
+on `GET /api/listings`; the frontend's established search mapping converts
+`housingType` to that endpoint's `propertyType` query parameter.
 
 ### Frontend
 
