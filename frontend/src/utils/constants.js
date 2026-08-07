@@ -12,6 +12,24 @@ export const housingTypes = [
 
 export const furnishedFilterOptions = ["Any", "Furnished", "Unfurnished"];
 
+export const supportedAmenityFilters = [
+  "WiFi",
+  "Laundry",
+  "Kitchen",
+  "Parking",
+  "Storage",
+  "Nearby Transit",
+  "Pet Friendly",
+  "Backyard Access",
+  "Gym",
+  "Air Conditioning",
+  "Utilities Included",
+  "Private Bathroom",
+  "Study Area",
+  "Balcony",
+  "Security",
+];
+
 export const advancedAmenityFilters = [
   "Laundry",
   "Parking",
@@ -37,6 +55,7 @@ export const defaultFormData = {
   maxRent: 2000,
   maxCommute: 30,
   safetyLevel: "Any",
+  furnished: "Any",
   amenities: [],
   notes: "",
 };

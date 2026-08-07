@@ -24,7 +24,28 @@ const getBackendMessage = (data) => {
     return data.errors.join(", ");
   }
 
-  return data.message || data.error || "";
+  if (typeof data.message === "string") {
+    return data.message;
+  }
+
+  if (typeof data.error === "string") {
+    return data.error;
+  }
+
+  if (data.error && typeof data.error.message === "string") {
+    return data.error.message;
+  }
+
+  return "";
+};
+
+const createApiError = (message, { status = null, data = null, cause } = {}) => {
+  const error = new Error(message, cause ? { cause } : undefined);
+  error.name = "ApiRequestError";
+  error.status = status;
+  error.code = data?.error?.code || null;
+  error.data = data;
+  return error;
 };
 
 export const getStoredAuthUser = () => {
@@ -55,7 +76,8 @@ export const formatDate = (dateValue) =>
 
 export const isValidEmail = (email) => /^\S+@\S+\.\S+$/.test(email);
 
-export const isUnauthorizedError = (error) => error.message.includes("HTTP 401");
+export const isUnauthorizedError = (error) =>
+  error?.status === 401 || error?.message?.includes("HTTP 401");
 
 export const apiRequest = async (path, options = {}, params = {}) => {
   const url = buildApiUrl(path, params);
@@ -64,7 +86,7 @@ export const apiRequest = async (path, options = {}, params = {}) => {
   try {
     response = await fetch(url, options);
   } catch (error) {
-    throw new Error(`API request failed: ${url}. ${error.message}`, {
+    throw createApiError(`API request failed: ${url}. ${error.message}`, {
       cause: error,
     });
   }
@@ -76,19 +98,20 @@ export const apiRequest = async (path, options = {}, params = {}) => {
     try {
       data = JSON.parse(text);
     } catch (error) {
-      throw new Error(
+      throw createApiError(
         `API request failed: ${url}. HTTP ${response.status} - backend returned a non-JSON response.`,
-        { cause: error },
+        { status: response.status, cause: error },
       );
     }
   }
 
   if (!response.ok) {
     const backendMessage = getBackendMessage(data);
-    throw new Error(
+    throw createApiError(
       `API request failed: ${url}. HTTP ${response.status}${
         backendMessage ? ` - ${backendMessage}` : ""
       }`,
+      { status: response.status, data },
     );
   }
 

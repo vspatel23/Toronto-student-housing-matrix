@@ -14,7 +14,11 @@ function CollapsiblePanel({
   const contentId = `${generatedId}-content`;
 
   return (
-    <div className={`collapsible-panel${className ? ` ${className}` : ""}`}>
+    <div
+      className={`collapsible-panel${isExpanded ? " is-expanded" : ""}${
+        className ? ` ${className}` : ""
+      }`}
+    >
       <div className="collapsible-panel-header">
         <button
           type="button"

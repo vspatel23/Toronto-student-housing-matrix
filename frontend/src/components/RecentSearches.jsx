@@ -11,6 +11,18 @@ const formatRentRange = (search) => {
   return `${minimum} – ${maximum}`;
 };
 
+const getSearchHeading = (search) => {
+  if (search.campus) {
+    return search.campus;
+  }
+
+  if (search.housingType && search.housingType !== "All types") {
+    return `${search.housingType} search`;
+  }
+
+  return "Housing search";
+};
+
 function RecentSearches({ searches = [], isLoading = false }) {
   return (
     <section className="recent-searches" aria-labelledby="recent-searches-title">
@@ -42,7 +54,7 @@ function RecentSearches({ searches = [], isLoading = false }) {
             return (
               <article className="recent-search-item" key={search._id}>
                 <div className="recent-search-heading">
-                  <h3>{search.campus || "Campus not recorded"}</h3>
+                  <h3>{getSearchHeading(search)}</h3>
                   {dateValue && (
                     <time dateTime={dateValue}>{formatDate(dateValue)}</time>
                   )}
