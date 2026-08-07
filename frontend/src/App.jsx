@@ -2,14 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { Routes, Route, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import "./App.css";
 import "./styles/ui-cleanup.css";
+import "./styles/ai-dashboard.css";
 import "./styles/listing-images.css";
 import {
   AUTH_TOKEN_KEY,
   AUTH_USER_KEY,
   DEFAULT_VALUE_SCORE_WEIGHTS,
   defaultFormData,
-  housingTypes,
-  safetyLevels,
 } from "./utils/constants";
 import { getCampusLabel } from "./utils/campusFormatters";
 import {
@@ -23,7 +22,6 @@ import AuthForm from "./components/AuthForm";
 import Header from "./components/Header";
 import StepProgress from "./components/StepProgress";
 import SearchForm from "./components/SearchForm";
-import HelpCards from "./components/HelpCards";
 import BrowseResults from "./components/BrowseResults";
 import CompareListings from "./components/CompareListings";
 import ListingDetail from "./components/ListingDetail";
@@ -36,6 +34,15 @@ import NotFound from "./components/NotFound";
 import StatusMessage from "./components/StatusMessage";
 import { getListingId, getListingTitle } from "./utils/listingFormatters";
 import { getRecommendationBadgesByListingId } from "./utils/recommendationBadges";
+import {
+  buildResultsPath,
+  createDefaultResultsFilters,
+  createResultsFiltersFromSearch,
+  getListingQueryParams,
+  isSameSearch,
+  mapAiFiltersToSearchState,
+  parseSearchFromQuery,
+} from "./utils/searchState";
 
 const MAX_COMPARE_LISTINGS = 3;
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
@@ -50,87 +57,6 @@ const isPublicRoute = (pathname) =>
   pathname === "/compare" ||
   /^\/listings\/[^/]+$/.test(pathname) ||
   /^\/shared\/collections\/[^/]+$/.test(pathname);
-
-const createDefaultResultsFilters = () => ({
-  minRent: "",
-  maxRent: "",
-  housingType: "All types",
-  safetyLevel: "Any",
-  maxCommute: "",
-  furnished: "Any",
-  amenities: [],
-});
-
-const hasValue = (value) =>
-  value !== undefined && value !== null && String(value).trim() !== "";
-
-const buildSearchQueryString = (searchData) => {
-  if (!searchData) {
-    return "";
-  }
-
-  const params = new URLSearchParams();
-
-  if (hasValue(searchData.campus)) {
-    params.set("campus", searchData.campus);
-  }
-  if (hasValue(searchData.minRent)) {
-    params.set("minRent", searchData.minRent);
-  }
-  if (hasValue(searchData.maxRent)) {
-    params.set("maxRent", searchData.maxRent);
-  }
-  if (searchData.housingType && searchData.housingType !== "All types") {
-    params.set("housingType", searchData.housingType);
-  }
-  if (searchData.safetyLevel && searchData.safetyLevel !== "Any") {
-    params.set("safetyLevel", searchData.safetyLevel);
-  }
-  if (hasValue(searchData.maxCommute)) {
-    params.set("maxCommute", searchData.maxCommute);
-  }
-
-  return params.toString();
-};
-
-const parseSearchFromQuery = (searchParams) => {
-  const campus = searchParams.get("campus") || "";
-  if (!campus) {
-    return null;
-  }
-
-  const minRent = Number(searchParams.get("minRent"));
-  const maxRent = Number(searchParams.get("maxRent"));
-  const maxCommute = Number(searchParams.get("maxCommute"));
-  const housingTypeParam = searchParams.get("housingType") || "All types";
-  const safetyLevelParam = searchParams.get("safetyLevel") || "Any";
-
-  return {
-    campus,
-    minRent: Number.isFinite(minRent) ? minRent : defaultFormData.minRent,
-    maxRent: Number.isFinite(maxRent) ? maxRent : defaultFormData.maxRent,
-    maxCommute: Number.isFinite(maxCommute)
-      ? maxCommute
-      : defaultFormData.maxCommute,
-    housingType: housingTypes.includes(housingTypeParam)
-      ? housingTypeParam
-      : "All types",
-    safetyLevel: safetyLevels.includes(safetyLevelParam)
-      ? safetyLevelParam
-      : "Any",
-    notes: "",
-  };
-};
-
-const isSameSearch = (a, b) =>
-  Boolean(a) &&
-  Boolean(b) &&
-  a.campus === b.campus &&
-  Number(a.minRent) === Number(b.minRent) &&
-  Number(a.maxRent) === Number(b.maxRent) &&
-  Number(a.maxCommute) === Number(b.maxCommute) &&
-  a.housingType === b.housingType &&
-  a.safetyLevel === b.safetyLevel;
 
 const parseCompareIdsFromQuery = (searchParams) => {
   const raw = searchParams.get("ids") || "";
@@ -184,6 +110,7 @@ function App() {
   const [campusError, setCampusError] = useState("");
   const [listings, setListings] = useState([]);
   const [activeSearch, setActiveSearch] = useState(null);
+  const [aiSearchDescription, setAiSearchDescription] = useState("");
   const [resultsFilters, setResultsFilters] = useState(
     createDefaultResultsFilters,
   );
@@ -268,6 +195,7 @@ function App() {
     setValidationErrors({});
     setListings([]);
     setActiveSearch(null);
+    setAiSearchDescription("");
     setResultsFilters(createDefaultResultsFilters());
     setResultsError("");
     setCampuses([]);
@@ -1277,14 +1205,11 @@ function App() {
     });
   };
 
-  const getListingQueryParams = (searchData) => ({
-    campus: searchData.campus,
-    minRent: searchData.minRent,
-    maxRent: searchData.maxRent,
-    propertyType:
-      searchData.housingType === "All types" ? "" : searchData.housingType,
-    safetyLevel: searchData.safetyLevel === "Any" ? "" : searchData.safetyLevel,
-  });
+  const clearManualSearch = () => {
+    setFormData({ ...defaultFormData, amenities: [] });
+    setValidationErrors({});
+    setStatus({ type: "", message: "" });
+  };
 
   const loadListingsForSearch = async (searchData) => {
     const requestId = latestListingsRequestId.current + 1;
@@ -1316,6 +1241,52 @@ function App() {
       if (requestId === latestListingsRequestId.current) {
         setIsLoadingResults(false);
       }
+    }
+  };
+
+  const recordSearchAnalytics = (searchData) => {
+    const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
+    if (!authUser || !authToken) {
+      return;
+    }
+
+    apiRequest("/api/analytics/search", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        campus: searchData.campus,
+        minRent: searchData.minRent,
+        maxRent: searchData.maxRent,
+        housingType: searchData.housingType,
+        maxCommute: searchData.maxCommute,
+      }),
+    })
+      .then(() => loadRecentSearches())
+      .catch(() => {
+        // Analytics is best-effort and must never block or degrade search.
+      });
+  };
+
+  const startListingSearch = async (searchSnapshot) => {
+    setResultsError("");
+    compareListingIdsRef.current = [];
+    setCompareListingIds([]);
+    setCompareStatus({ type: "", message: "" });
+    setActiveSearch(searchSnapshot);
+    setResultsFilters(createResultsFiltersFromSearch(searchSnapshot));
+
+    navigate(buildResultsPath(searchSnapshot));
+    const listingRequest = loadListingsForSearch(searchSnapshot);
+    recordSearchAnalytics(searchSnapshot);
+
+    try {
+      const listingData = await listingRequest;
+      return { listingData, listingLoadFailed: false };
+    } catch {
+      return { listingData: { count: 0 }, listingLoadFailed: true };
     }
   };
 
@@ -1369,10 +1340,6 @@ function App() {
     setIsSavingPreference(true);
     setStatus({ type: "", message: "" });
     setValidationErrors({});
-    setResultsError("");
-    compareListingIdsRef.current = [];
-    setCompareListingIds([]);
-    setCompareStatus({ type: "", message: "" });
 
     const searchSnapshot = { ...formData };
 
@@ -1386,49 +1353,10 @@ function App() {
         body: JSON.stringify(formData),
       });
 
-      setStatus({
-        type: "success",
-        message: "Your preferences were saved successfully.",
-      });
-      setActiveSearch(searchSnapshot);
-      setResultsFilters({
-        ...createDefaultResultsFilters(),
-        minRent: searchSnapshot.minRent,
-        maxRent: searchSnapshot.maxRent,
-        housingType: searchSnapshot.housingType,
-        safetyLevel: "Any",
-        maxCommute: searchSnapshot.maxCommute,
-      });
-      navigate(`/results?${buildSearchQueryString(searchSnapshot)}`);
       setIsSavingPreference(false);
-
-      let listingData = { count: 0 };
-      let listingLoadFailed = false;
-      try {
-        listingData = await loadListingsForSearch(searchSnapshot);
-      } catch {
-        listingLoadFailed = true;
-        listingData = { count: 0 };
-      }
-
-      apiRequest("/api/analytics/search", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          campus: searchSnapshot.campus,
-          minRent: searchSnapshot.minRent,
-          maxRent: searchSnapshot.maxRent,
-          housingType: searchSnapshot.housingType,
-          maxCommute: searchSnapshot.maxCommute,
-        }),
-      })
-        .then(() => loadRecentSearches())
-        .catch(() => {
-          // Analytics is best-effort and must never block or degrade search.
-        });
+      setAiSearchDescription("");
+      const { listingData, listingLoadFailed } =
+        await startListingSearch(searchSnapshot);
 
       setStatus({
         type: listingLoadFailed ? "error" : "success",
@@ -1454,6 +1382,27 @@ function App() {
     } finally {
       setIsSavingPreference(false);
     }
+  };
+
+  const handleAiSearch = async ({ filters, description }) => {
+    const searchSnapshot = mapAiFiltersToSearchState(filters);
+    setAiSearchDescription(description);
+    setStatus({ type: "", message: "" });
+    setValidationErrors({});
+
+    const { listingData, listingLoadFailed } =
+      await startListingSearch(searchSnapshot);
+
+    setStatus({
+      type: listingLoadFailed ? "error" : "success",
+      message: listingLoadFailed
+        ? "We started your search, but couldn’t load listings right now. Please retry from the results page."
+        : listingData.count > 0
+          ? `Found ${listingData.count} housing listing${
+              listingData.count === 1 ? "" : "s"
+            }.`
+          : "No listings match these filters yet. Try adjusting your search.",
+    });
   };
 
   const retryCampuses = async () => {
@@ -1651,9 +1600,7 @@ function App() {
         return `/compare?ids=${compareListingIdsRef.current.join(",")}`;
       case "results":
       default:
-        return activeSearch
-          ? `/results?${buildSearchQueryString(activeSearch)}`
-          : "/";
+        return activeSearch ? buildResultsPath(activeSearch) : "/";
     }
   };
 
@@ -1739,14 +1686,7 @@ function App() {
 
     const loadInitialResults = async () => {
       setActiveSearch(queryFilters);
-      setResultsFilters({
-        ...createDefaultResultsFilters(),
-        minRent: queryFilters.minRent,
-        maxRent: queryFilters.maxRent,
-        housingType: queryFilters.housingType,
-        safetyLevel: "Any",
-        maxCommute: queryFilters.maxCommute,
-      });
+      setResultsFilters(createResultsFiltersFromSearch(queryFilters));
 
       setIsLoadingResults(true);
       setResultsError("");
@@ -2130,37 +2070,27 @@ function App() {
         <Route
           path="/"
           element={
-            <>
-              <section className="hero-section">
-                <div className="hero-copy">
-                  <h1>Compare Housing Beyond Rent</h1>
-                  <p>
-                    Make informed housing decisions using TTC commute times,
-                    neighbourhood safety data, and listing details in one
-                    place.
-                  </p>
-                </div>
-              </section>
-
-              <SearchForm
-                campuses={campuses}
-                formData={formData}
-                status={status}
-                isSavingPreference={isSavingPreference}
-                isSearchingListings={isLoadingResults}
-                isLoadingCampuses={isLoadingCampuses}
-                campusError={campusError}
-                validationErrors={validationErrors}
-                onFieldChange={updateField}
-                onRentChange={handleRentChange}
-                onSubmit={handleSubmit}
-                onRetryCampuses={retryCampuses}
-                recentSearches={recentSearches}
-                isLoadingRecentSearches={isLoadingRecentSearches}
-              />
-
-              <HelpCards />
-            </>
+            <SearchForm
+              userName={displayName}
+              campuses={campuses}
+              formData={formData}
+              status={status}
+              isSavingPreference={isSavingPreference}
+              isSearchingListings={isLoadingResults}
+              isLoadingCampuses={isLoadingCampuses}
+              campusError={campusError}
+              validationErrors={validationErrors}
+              onFieldChange={updateField}
+              onRentChange={handleRentChange}
+              onSubmit={handleSubmit}
+              onClear={clearManualSearch}
+              onRetryCampuses={retryCampuses}
+              aiSearchDescription={aiSearchDescription}
+              onAiSearchDescriptionChange={setAiSearchDescription}
+              onAiSearch={handleAiSearch}
+              recentSearches={recentSearches}
+              isLoadingRecentSearches={isLoadingRecentSearches}
+            />
           }
         />
 
