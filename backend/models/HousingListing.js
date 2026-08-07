@@ -1,36 +1,14 @@
 const mongoose = require("mongoose");
 const {
+  AMENITY_FILTER_VALUES,
+  PROPERTY_TYPE_VALUES,
+} = require("../constants/housingFilters");
+const {
   isAllowedListingImageSource,
   MAX_IMAGE_ALT_LENGTH,
   MIN_IMAGE_ALT_LENGTH,
   prepareListingImagesForStorage,
 } = require("../utils/listingImages");
-
-const propertyTypes = [
-  "Apartment",
-  "Shared House",
-  "Studio",
-  "Basement",
-  "Room Rental",
-];
-
-const amenityValues = [
-  "WiFi",
-  "Laundry",
-  "Kitchen",
-  "Parking",
-  "Storage",
-  "Nearby Transit",
-  "Pet Friendly",
-  "Backyard Access",
-  "Gym",
-  "Air Conditioning",
-  "Utilities Included",
-  "Private Bathroom",
-  "Study Area",
-  "Balcony",
-  "Security",
-];
 
 const listingImageSchema = new mongoose.Schema(
   {
@@ -120,7 +98,7 @@ const housingListingSchema = new mongoose.Schema(
     propertyType: {
       type: String,
       required: true,
-      enum: propertyTypes,
+      enum: PROPERTY_TYPE_VALUES,
       trim: true,
     },
     bedrooms: {
@@ -177,7 +155,7 @@ const housingListingSchema = new mongoose.Schema(
       type: [
         {
           type: String,
-          enum: amenityValues,
+          enum: AMENITY_FILTER_VALUES,
         },
       ],
       default: [],

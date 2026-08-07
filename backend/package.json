@@ -7,6 +7,7 @@
     "start": "node server.js",
     "dev": "nodemon server.js",
     "check": "node scripts/checkSyntax.js",
+    "check:ai": "node scripts/checkAiConfig.js",
     "check:indexes": "node scripts/checkIndexes.js",
     "seed:listings": "node scripts/seedListings.js",
     "test": "node --test tests/*.test.js"

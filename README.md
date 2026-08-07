@@ -36,6 +36,43 @@ npm start
 
 Before starting the backend, replace the placeholder MongoDB URI in `backend/.env` with a real local or hosted MongoDB connection string.
 
+### OpenRouter AI setup
+
+The shared AI infrastructure uses OpenRouter from the backend only. Issue #59
+does not add a public AI search endpoint or frontend AI integration.
+
+1. Create an OpenRouter API key at <https://openrouter.ai/keys>.
+2. Add the key and a model slug to your local `backend/.env`:
+
+   ```dotenv
+   OPENROUTER_API_KEY=your_real_key_here
+   OPENROUTER_MODEL=openai/gpt-4o-mini
+   ```
+
+3. Install and validate the backend configuration, then start the server:
+
+   ```bash
+   cd backend
+   npm install
+   npm run check:ai
+   npm start
+   ```
+
+`npm run check:ai` validates the local configuration without making a paid AI
+request or printing the API key; it does not authenticate against OpenRouter.
+When `OPENROUTER_MODEL` is omitted, the
+backend defaults to `openai/gpt-4o-mini`, a relatively inexpensive model that
+supports structured JSON output. After the server starts, confirm existing
+backend operation at <http://localhost:5000/api/health> (or the `PORT` value in
+your environment).
+
+The reusable housing-filter validator rejects unknown top-level fields and
+invalid supported values. OpenRouter output is parsed as JSON and must pass
+this application-side validator before future routes can use it.
+
+Never commit `backend/.env`. Keep the OpenRouter key out of frontend variables,
+Vite source code, logs, tests, and API responses.
+
 ### Frontend
 
 ```bash
