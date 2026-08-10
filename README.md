@@ -296,6 +296,30 @@ The frontend reads `VITE_API_URL` to connect to the backend API. For local devel
 
 Browse Results and individual Listing Details use React Leaflet with OpenStreetMap data to visualize listings and the selected campus. Listing Details labels its calculated geographic distance as straight-line distance; it is not route distance. Its Open Directions action opens a standard external Google Maps transit-directions URL and does not load the Google Maps JavaScript API or require a Google API key.
 
+### Nearby Student Essentials
+
+Listing Details uses deterministic bundled demo data to show public transit,
+grocery stores, pharmacies, libraries, parks, gyms, clinics, and
+campus-related locations within a 2.5 km straight-line radius. The fixed
+Toronto place records are a bundled OpenStreetMap snapshot, with campus
+locations also aligned to the project's campus seed data. The UI credits
+[OpenStreetMap contributors](https://www.openstreetmap.org/copyright), whose
+data is available under the Open Database License. The frontend normalizes
+every supported place to a stable ID, name, category, numeric distance,
+optional address, and optional coordinates. Distances reuse the listing-map
+Haversine calculation and must not be interpreted as walking or driving
+routes. The list initially shows six places, can be filtered by category,
+sorted by distance, and expanded without duplicating results.
+
+The nearby-place seed is immutable application data loaded asynchronously so
+the UI can isolate loading, empty, and retryable error states from the rest of
+Listing Details. It is a fixed demo snapshot rather than a live business
+directory, so listings outside the covered Toronto area can legitimately show
+the empty state. No external place provider is queried at runtime, and no paid
+request, backend cache, service credential, or additional environment variable
+is used; runtime caching and provider rate-limit handling therefore do not
+apply to this implementation.
+
 Set `VITE_MAPTILER_KEY` in the frontend environment to enable MapTiler raster tiles on Browse Results. When the key is omitted, Browse Results uses OpenStreetMap tiles so local builds and CI are not blocked. The Listing Details map uses OpenStreetMap tiles directly and requires no map key.
 
 Configure the MapTiler key in the frontend deployment environment only. Because Vite embeds browser environment variables at build time, redeploy the frontend after adding or changing `VITE_MAPTILER_KEY`.

@@ -1,12 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import L from "leaflet";
+import { useCallback, useMemo, useState } from "react";
 import {
   MapContainer,
   Marker,
   Popup,
   TileLayer,
   Tooltip,
-  useMap,
 } from "react-leaflet";
 import { getCampusLabel } from "../utils/campusFormatters";
 import {
@@ -29,38 +27,7 @@ import {
 } from "../utils/listingFormatters";
 import MapAccessibilityController from "./MapAccessibilityController";
 import MapBoundsController from "./MapBoundsController";
-
-function FocusActiveMarker({ coordinates }) {
-  const map = useMap();
-  const lastFocusedKey = useRef("");
-
-  useEffect(() => {
-    if (!coordinates) {
-      lastFocusedKey.current = "";
-      return;
-    }
-
-    const activeKey = getMapPointKey(coordinates);
-
-    if (lastFocusedKey.current === activeKey) {
-      return;
-    }
-
-    lastFocusedKey.current = activeKey;
-
-    const activePoint = L.latLng(coordinates);
-    const visibleBounds = map.getBounds().pad(-0.18);
-
-    if (!visibleBounds.contains(activePoint)) {
-      map.panTo(activePoint, {
-        animate: true,
-        duration: 0.45,
-      });
-    }
-  }, [coordinates, map]);
-
-  return null;
-}
+import MapFocusController from "./MapFocusController";
 
 function ListingsMap({
   listings,
@@ -208,7 +175,7 @@ function ListingsMap({
 
             <MapBoundsController points={mapPoints} pointsKey={pointsKey} />
             <MapAccessibilityController label="Interactive map of filtered housing listings and selected campus" />
-            <FocusActiveMarker coordinates={activeMarker?.coordinates || null} />
+            <MapFocusController coordinates={activeMarker?.coordinates || null} />
 
             {campusCoordinates && (
               <Marker

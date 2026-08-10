@@ -11,6 +11,7 @@ import {
   getListingTitle,
   getLocationLabel,
 } from "../utils/listingFormatters";
+import { getNearbyPlaceCoordinates } from "../utils/nearbyPlaces";
 import ListingLocationMap from "./ListingLocationMap";
 
 const hasText = (value) =>
@@ -34,6 +35,9 @@ function ListingLocationSection({
   selectedCampus,
   isLoadingCampus = false,
   campusError = "",
+  nearbyPlaces = [],
+  selectedPlaceId = "",
+  onSelectNearbyPlace,
 }) {
   const listingCoordinates = getValidCoordinates(listing);
   const campusCoordinates = getValidCoordinates(selectedCampus);
@@ -57,6 +61,9 @@ function ListingLocationSection({
     : "";
   const listingAddress = getAddress(listing) || getLocationLabel(listing);
   const campusAddress = getAddress(selectedCampus);
+  const hasNearbyPlaceMarkers = nearbyPlaces.some((place) =>
+    Boolean(getNearbyPlaceCoordinates(place)),
+  );
 
   let campusMapStatus = "";
 
@@ -103,6 +110,12 @@ function ListingLocationSection({
                 Campus
               </span>
             )}
+            {hasNearbyPlaceMarkers && (
+              <span>
+                <i className="map-legend-marker nearby" aria-hidden="true">E</i>
+                Nearby essential
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -113,6 +126,9 @@ function ListingLocationSection({
             <ListingLocationMap
               listing={listing}
               selectedCampus={selectedCampus}
+              nearbyPlaces={nearbyPlaces}
+              selectedPlaceId={selectedPlaceId}
+              onSelectNearbyPlace={onSelectNearbyPlace}
             />
           ) : (
             <div
