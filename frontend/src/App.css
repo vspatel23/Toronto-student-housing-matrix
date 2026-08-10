@@ -1047,6 +1047,9 @@
 }
 
 .leaflet-container.listings-map {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   color: var(--color-text);
   font: inherit;
 }
@@ -2961,6 +2964,9 @@
 }
 
 .leaflet-container.listing-location-map {
+  position: relative;
+  z-index: 0;
+  isolation: isolate;
   color: var(--color-text);
   font: inherit;
 }
