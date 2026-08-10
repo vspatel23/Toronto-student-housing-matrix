@@ -8,6 +8,13 @@ const clampScore = (score) => {
   return Math.max(0, Math.min(100, Math.round(numericScore)));
 };
 
+const VALUE_SCORE_WEIGHTS = Object.freeze({
+  affordability: 35,
+  commute: 25,
+  safety: 25,
+  amenities: 15,
+});
+
 const hasValue = (value) =>
   value !== undefined && value !== null && String(value).trim() !== "";
 
@@ -41,7 +48,7 @@ const getRentNumber = (listing) => {
   return Number.isFinite(rent) && rent >= 0 ? rent : null;
 };
 
-const getCommuteMinutes = (listing, campus) => {
+const getCommuteEstimate = (listing, campus) => {
   if (!Array.isArray(listing?.commuteEstimates)) {
     return null;
   }
@@ -61,8 +68,43 @@ const getCommuteMinutes = (listing, campus) => {
     commuteEstimate = listing.commuteEstimates[0];
   }
 
+  return commuteEstimate || null;
+};
+
+const getCommuteMinutes = (listing, campus) => {
+  const commuteEstimate = getCommuteEstimate(listing, campus);
+
   const minutes = Number(commuteEstimate?.minutes);
   return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
+};
+
+const getAvailableSafetyScore = (listing) => {
+  const rawSafetyScore = listing?.safety?.safetyScore;
+  const safetyScore = hasValue(rawSafetyScore)
+    ? Number(rawSafetyScore)
+    : Number.NaN;
+
+  if (Number.isFinite(safetyScore) && safetyScore >= 0 && safetyScore <= 100) {
+    return safetyScore;
+  }
+
+  const crimeRateLevel = hasValue(listing?.safety?.crimeRateLevel)
+    ? String(listing.safety.crimeRateLevel).trim().toLowerCase()
+    : "";
+
+  if (crimeRateLevel === "low") {
+    return 100;
+  }
+
+  if (crimeRateLevel === "medium") {
+    return 72;
+  }
+
+  if (crimeRateLevel === "high") {
+    return 42;
+  }
+
+  return null;
 };
 
 const getSafetyScore = (listing) => {
@@ -151,15 +193,20 @@ const calculateValueScore = (listing, campus) => {
   // The weights reflect the project goal: students usually care most about rent,
   // but commute and safety are also major decision factors.
   const overall =
-    breakdown.affordability * 0.35 +
-    breakdown.commute * 0.25 +
-    breakdown.safety * 0.25 +
-    breakdown.amenities * 0.15;
+    breakdown.affordability * (VALUE_SCORE_WEIGHTS.affordability / 100) +
+    breakdown.commute * (VALUE_SCORE_WEIGHTS.commute / 100) +
+    breakdown.safety * (VALUE_SCORE_WEIGHTS.safety / 100) +
+    breakdown.amenities * (VALUE_SCORE_WEIGHTS.amenities / 100);
 
   return clampScore(overall);
 };
 
 module.exports = {
+  VALUE_SCORE_WEIGHTS,
   calculateValueScore,
   calculateValueScoreBreakdown,
+  getAvailableSafetyScore,
+  getCommuteEstimate,
+  getCommuteMinutes,
+  getRentNumber,
 };
