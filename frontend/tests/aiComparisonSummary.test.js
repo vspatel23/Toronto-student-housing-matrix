@@ -487,6 +487,9 @@ test("successful Regenerate replaces the old result and focuses the refreshed su
   const oldText =
     "Choose listing Annex Student Room, which has the highest existing Value Score at 89/100.";
   await screen.findByText(oldText);
+  await waitFor(() =>
+    assert.equal(document.activeElement?.id, "ai-comparison-title"),
+  );
 
   const regenerateButton = screen.getByRole("button", { name: "Regenerate" });
   regenerateButton.focus();

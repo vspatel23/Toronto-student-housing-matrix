@@ -1,6 +1,8 @@
 import ListingBadges from "./ListingBadges";
 import ListingImageGallery from "./ListingImageGallery";
 import ListingLocationExperience from "./ListingLocationExperience";
+import MonthlyHousingCostCalculator from "./MonthlyHousingCostCalculator";
+import { normalizeListingRent } from "../utils/monthlyHousingCost";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -73,6 +75,9 @@ function ListingDetail({
   const effectiveWeights = normalizeValueScoreWeights(valueScoreWeights);
   const listingId = getListingId(listing);
   const listingTitle = getListingTitle(listing);
+  const advertisedRent = normalizeListingRent(
+    listing?.monthlyRent ?? listing?.rent,
+  );
   const isCompareFull =
     !isCompared && compareCount >= maxCompareListings;
   const compareButtonLabel = isCompared
@@ -184,7 +189,9 @@ function ListingDetail({
 
           <dl className="detail-quick-stats" aria-label="Listing quick statistics">
             <DetailStat label="Monthly rent" featured>
-              {formatRent(listing.monthlyRent ?? listing.rent)}
+              {advertisedRent === null
+                ? DATA_UNAVAILABLE
+                : formatRent(advertisedRent)}
             </DetailStat>
             <DetailStat label="Estimated commute">
               {campus ? formatCommute(listing, campus) : DATA_UNAVAILABLE}
@@ -203,6 +210,11 @@ function ListingDetail({
               {formatFurnishedStatus(listing.furnished)}
             </DetailStat>
           </dl>
+
+          <MonthlyHousingCostCalculator
+            listingId={listingId || listingTitle}
+            listingRent={advertisedRent}
+          />
 
           <ListingLocationExperience
             listing={listing}
