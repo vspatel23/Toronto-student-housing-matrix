@@ -1,4 +1,5 @@
 import { DEFAULT_VALUE_SCORE_WEIGHTS } from "./constants";
+import { getCampusLabel } from "./campusFormatters";
 
 export const DATA_UNAVAILABLE = "Data unavailable";
 
@@ -25,7 +26,7 @@ export const normalizeCampusName = (value) =>
         .toLowerCase()
     : "";
 
-const isMatchingCampusName = (estimateCampus, selectedCampus) => {
+export const isMatchingCampusName = (estimateCampus, selectedCampus) => {
   const normalizedEstimateCampus = normalizeCampusName(estimateCampus);
   const normalizedSelectedCampus = normalizeCampusName(selectedCampus);
 
@@ -38,6 +39,33 @@ const isMatchingCampusName = (estimateCampus, selectedCampus) => {
     normalizedSelectedCampus.startsWith(`${normalizedEstimateCampus} -`) ||
     normalizedEstimateCampus.startsWith(`${normalizedSelectedCampus} -`)
   );
+};
+
+export const findCampusByLabel = (campuses, campusLabel) => {
+  if (!Array.isArray(campuses)) {
+    return null;
+  }
+
+  const normalizedCampusLabel = normalizeCampusName(campusLabel);
+
+  if (!normalizedCampusLabel) {
+    return null;
+  }
+
+  const exactMatch = campuses.find(
+    (campus) =>
+      normalizeCampusName(getCampusLabel(campus)) === normalizedCampusLabel,
+  );
+
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const compatibleMatches = campuses.filter((campus) =>
+    isMatchingCampusName(getCampusLabel(campus), campusLabel),
+  );
+
+  return compatibleMatches.length === 1 ? compatibleMatches[0] : null;
 };
 
 export const formatRent = (value) => {

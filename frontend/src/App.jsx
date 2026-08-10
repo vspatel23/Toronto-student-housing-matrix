@@ -10,7 +10,6 @@ import {
   DEFAULT_VALUE_SCORE_WEIGHTS,
   defaultFormData,
 } from "./utils/constants";
-import { getCampusLabel } from "./utils/campusFormatters";
 import {
   getStoredAuthUser,
   clearAuthStorage,
@@ -32,7 +31,11 @@ import CollectionPickerModal from "./components/CollectionPickerModal";
 import CopyLinkButton from "./components/CopyLinkButton";
 import NotFound from "./components/NotFound";
 import StatusMessage from "./components/StatusMessage";
-import { getListingId, getListingTitle } from "./utils/listingFormatters";
+import {
+  findCampusByLabel,
+  getListingId,
+  getListingTitle,
+} from "./utils/listingFormatters";
 import { getRecommendationBadgesByListingId } from "./utils/recommendationBadges";
 import {
   buildResultsPath,
@@ -339,8 +342,11 @@ function App() {
     };
   }, []);
 
+  const shouldLoadCampuses =
+    Boolean(authUser) || isPublicRoute(location.pathname);
+
   useEffect(() => {
-    if (!authUser) {
+    if (!shouldLoadCampuses) {
       return;
     }
 
@@ -374,7 +380,7 @@ function App() {
     return () => {
       isMounted = false;
     };
-  }, [authUser]);
+  }, [shouldLoadCampuses]);
 
   const loadRecentSearches = async () => {
     const authToken = localStorage.getItem(AUTH_TOKEN_KEY);
@@ -1765,7 +1771,7 @@ function App() {
 
     loadInitialListingDetail();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [Boolean(authUser), location.pathname]);
+  }, [Boolean(authUser), location.pathname, location.search]);
 
   useEffect(() => {
     if (location.pathname !== "/compare") {
@@ -1995,10 +2001,13 @@ function App() {
       : location.pathname === "/compare"
         ? "compare"
         : "search";
-  const selectedCampus =
-    campuses.find(
-      (campus) => getCampusLabel(campus) === activeSearch?.campus,
-    ) || null;
+  const detailCampusLabel =
+    searchParams.get("campus") || activeSearch?.campus || "";
+  const selectedCampus = findCampusByLabel(campuses, activeSearch?.campus);
+  const detailSelectedCampus = findCampusByLabel(
+    campuses,
+    detailCampusLabel,
+  );
   const comparisonListingPool = Array.from(
     new Map(
       [
@@ -2276,7 +2285,10 @@ function App() {
               </div>
               <ListingDetail
                 listing={selectedListing}
-                campus={searchParams.get("campus") || activeSearch?.campus}
+                campus={detailCampusLabel}
+                selectedCampus={detailSelectedCampus}
+                isLoadingCampus={isLoadingCampuses}
+                campusError={campusError}
                 badges={recommendationBadgesByListingId[selectedListingId] || []}
                 isLoading={isLoadingListing}
                 errorMessage={listingError}

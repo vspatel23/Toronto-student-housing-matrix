@@ -157,9 +157,11 @@ npm run dev
 
 The frontend reads `VITE_API_URL` to connect to the backend API. For local development, the example value points to `http://localhost:5000`.
 
-### Interactive Results Map
+### Interactive Maps and Directions
 
-The Browse Results page uses React Leaflet to visualize listings and the selected campus. Set `VITE_MAPTILER_KEY` in the frontend environment to enable MapTiler raster tiles. When the key is omitted, the frontend uses OpenStreetMap tiles as a development fallback so local builds and CI are not blocked.
+Browse Results and individual Listing Details use React Leaflet with OpenStreetMap data to visualize listings and the selected campus. Listing Details labels its calculated geographic distance as straight-line distance; it is not route distance. Its Open Directions action opens a standard external Google Maps transit-directions URL and does not load the Google Maps JavaScript API or require a Google API key.
+
+Set `VITE_MAPTILER_KEY` in the frontend environment to enable MapTiler raster tiles on Browse Results. When the key is omitted, Browse Results uses OpenStreetMap tiles so local builds and CI are not blocked. The Listing Details map uses OpenStreetMap tiles directly and requires no map key.
 
 Configure the MapTiler key in the frontend deployment environment only. Because Vite embeds browser environment variables at build time, redeploy the frontend after adding or changing `VITE_MAPTILER_KEY`.
 

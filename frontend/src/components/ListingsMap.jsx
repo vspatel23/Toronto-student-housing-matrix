@@ -14,69 +14,21 @@ import {
   getValidCoordinates,
 } from "../utils/mapCoordinates";
 import {
+  createCampusIcon,
+  createListingIcon,
+  getMapPointKey,
+  MAPTILER_ATTRIBUTION,
+  OSM_ATTRIBUTION,
+  OSM_TILE_URL,
+} from "../utils/mapPresentation";
+import {
   formatRent,
   getListingId,
   getListingTitle,
   getLocationLabel,
 } from "../utils/listingFormatters";
-
-const OSM_TILE_URL = "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png";
-const OSM_ATTRIBUTION =
-  '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
-const MAPTILER_ATTRIBUTION =
-  '&copy; <a href="https://www.maptiler.com/copyright/">MapTiler</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap contributors</a>';
-
-const createListingIcon = (isActive = false) =>
-  L.divIcon({
-    className: `housing-map-marker${isActive ? " active" : ""}`,
-    html: '<span aria-hidden="true"></span>',
-    iconAnchor: isActive ? [17, 17] : [14, 14],
-    iconSize: isActive ? [34, 34] : [28, 28],
-    popupAnchor: [0, -18],
-    tooltipAnchor: [0, -18],
-  });
-
-const createCampusIcon = () =>
-  L.divIcon({
-    className: "campus-map-marker",
-    html: '<span aria-hidden="true">C</span>',
-    iconAnchor: [18, 18],
-    iconSize: [36, 36],
-    popupAnchor: [0, -20],
-    tooltipAnchor: [0, -20],
-  });
-
-const getPointKey = (point) => `${point[0].toFixed(6)},${point[1].toFixed(6)}`;
-
-function FitMapToLocations({ points, pointsKey }) {
-  const map = useMap();
-  const lastFitKey = useRef("");
-
-  useEffect(() => {
-    if (lastFitKey.current === pointsKey || points.length === 0) {
-      return;
-    }
-
-    lastFitKey.current = pointsKey;
-
-    if (points.length === 1) {
-      map.setView(points[0], 14, { animate: false });
-      return;
-    }
-
-    const bounds = L.latLngBounds(points);
-
-    if (bounds.isValid()) {
-      map.fitBounds(bounds, {
-        padding: [35, 35],
-        maxZoom: 15,
-        animate: false,
-      });
-    }
-  }, [map, points, pointsKey]);
-
-  return null;
-}
+import MapAccessibilityController from "./MapAccessibilityController";
+import MapBoundsController from "./MapBoundsController";
 
 function FocusActiveMarker({ coordinates }) {
   const map = useMap();
@@ -88,7 +40,7 @@ function FocusActiveMarker({ coordinates }) {
       return;
     }
 
-    const activeKey = getPointKey(coordinates);
+    const activeKey = getMapPointKey(coordinates);
 
     if (lastFocusedKey.current === activeKey) {
       return;
@@ -158,7 +110,7 @@ function ListingsMap({
       ].filter(Boolean),
     [campusCoordinates, listingMarkers],
   );
-  const pointsKey = mapPoints.map(getPointKey).join("|");
+  const pointsKey = mapPoints.map(getMapPointKey).join("|");
   const activeMarker = listingMarkers.find(
     (marker) => marker.listingId && marker.listingId === activeListingId,
   );
@@ -197,7 +149,11 @@ function ListingsMap({
             Select a marker to highlight its listing card.
           </p>
         </div>
-        <div className="results-map-legend" aria-label="Map marker legend">
+        <div
+          className="results-map-legend"
+          role="group"
+          aria-label="Map marker legend"
+        >
           <span>
             <i className="map-legend-marker listing" aria-hidden="true"></i>
             Listing
@@ -237,9 +193,9 @@ function ListingsMap({
           )}
 
           <MapContainer
-            aria-label="Interactive map of filtered housing listings and selected campus"
             center={initialCenter}
             className="listings-map"
+            keyboard
             scrollWheelZoom={false}
             zoom={13}
           >
@@ -250,7 +206,8 @@ function ListingsMap({
               url={tileUrl}
             />
 
-            <FitMapToLocations points={mapPoints} pointsKey={pointsKey} />
+            <MapBoundsController points={mapPoints} pointsKey={pointsKey} />
+            <MapAccessibilityController label="Interactive map of filtered housing listings and selected campus" />
             <FocusActiveMarker coordinates={activeMarker?.coordinates || null} />
 
             {campusCoordinates && (
@@ -278,7 +235,7 @@ function ListingsMap({
 
                 return (
                   <Marker
-                    key={listingId || `${getPointKey(coordinates)}-${index}`}
+                    key={listingId || `${getMapPointKey(coordinates)}-${index}`}
                     eventHandlers={{
                       click: () => {
                         if (listingId) {
