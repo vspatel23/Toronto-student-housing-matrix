@@ -361,6 +361,137 @@ test("Listing Details keeps its controlled loading state without flashing a map"
   assert.equal(screen.queryByTestId("leaflet-map"), null);
 });
 
+test("Listing Details renders the monthly cost estimate without disrupting core details or actions", async () => {
+  const saveCalls = [];
+  const compareCalls = [];
+  const listing = createListing();
+
+  render(
+    React.createElement(ListingDetail, {
+      listing,
+      campus: CAMPUS_LABEL,
+      selectedCampus: createCampus(),
+      isLoading: false,
+      errorMessage: "",
+      onBack() {},
+      onToggleSave(listingId) {
+        saveCalls.push(listingId);
+      },
+      onCompareListing(listingId) {
+        compareCalls.push(listingId);
+      },
+      loadNearbyPlaces: async () => [],
+    }),
+  );
+
+  await screen.findByText(
+    "No nearby student essentials were found for this listing.",
+  );
+
+  const calculatorTitle = screen.getByRole("heading", {
+    name: "Monthly Housing Cost Estimate",
+  });
+  const calculator = calculatorTitle.closest("section");
+  assert.ok(calculator);
+  assert.ok(within(calculator).getAllByText("$1,450.00").length >= 1);
+
+  fireEvent.click(screen.getByRole("button", { name: "Save Listing" }));
+  fireEvent.click(screen.getByRole("button", { name: "Add to Compare" }));
+  assert.deepEqual(saveCalls, [LISTING_ID]);
+  assert.deepEqual(compareCalls, [LISTING_ID]);
+
+  assert.ok(screen.getByRole("heading", { name: "About this listing" }));
+  assert.ok(screen.getByRole("heading", { name: "Amenities" }));
+  assert.ok(screen.getByRole("heading", { name: "Location" }));
+  assert.ok(
+    screen.getByRole("region", {
+      name: "Map showing listing and selected campus",
+    }),
+  );
+  assert.ok(screen.getByRole("link", { name: /Open directions from/ }));
+});
+
+test("Listing Details keeps details and actions available when advertised rent is missing", async () => {
+  render(
+    React.createElement(ListingDetail, {
+      listing: createListing({ monthlyRent: null }),
+      campus: CAMPUS_LABEL,
+      selectedCampus: createCampus(),
+      isLoading: false,
+      errorMessage: "",
+      onBack() {},
+      onToggleSave() {},
+      onCompareListing() {},
+      loadNearbyPlaces: async () => [],
+    }),
+  );
+
+  await screen.findByText(
+    "No nearby student essentials were found for this listing.",
+  );
+
+  const calculatorTitle = screen.getByRole("heading", {
+    name: "Monthly Housing Cost Estimate",
+  });
+  const calculator = calculatorTitle.closest("section");
+  assert.ok(calculator);
+  assert.ok(
+    within(calculator).getByText(
+      /Monthly cost estimate unavailable because this listing does not have a valid advertised rent\./i,
+    ),
+  );
+  assert.ok(within(calculator).getByText("Estimated Monthly Total"));
+  assert.ok(within(calculator).getByText("Difference from Advertised Rent"));
+  assert.ok(
+    within(calculator).getAllByText("Unavailable").length >= 2,
+  );
+
+  assert.ok(screen.getByText("Data unavailable"));
+  assert.ok(screen.getByRole("button", { name: "Save Listing" }));
+  assert.ok(screen.getByRole("button", { name: "Add to Compare" }));
+  assert.ok(screen.getByRole("heading", { name: "About this listing" }));
+  assert.ok(screen.getByRole("heading", { name: "Amenities" }));
+  assert.ok(screen.getByRole("heading", { name: "Location" }));
+  assert.ok(
+    screen.getByRole("region", {
+      name: "Map showing listing and selected campus",
+    }),
+  );
+  assert.ok(screen.getByRole("link", { name: /Open directions from/ }));
+});
+
+test("Listing Details treats malformed advertised rent as unavailable everywhere", async () => {
+  render(
+    React.createElement(ListingDetail, {
+      listing: createListing({ monthlyRent: "not-rent" }),
+      campus: CAMPUS_LABEL,
+      selectedCampus: createCampus(),
+      isLoading: false,
+      errorMessage: "",
+      onBack() {},
+      onToggleSave() {},
+      onCompareListing() {},
+      loadNearbyPlaces: async () => [],
+    }),
+  );
+
+  await screen.findByText(
+    "No nearby student essentials were found for this listing.",
+  );
+
+  const rentStat = screen.getByText("Monthly rent", { exact: true }).closest(
+    ".detail-stat",
+  );
+  assert.match(rentStat?.textContent || "", /Monthly rentData unavailable/);
+
+  const calculator = screen
+    .getByRole("heading", { name: "Monthly Housing Cost Estimate" })
+    .closest("section");
+  assert.ok(calculator);
+  assert.ok(within(calculator).getByText(/valid advertised rent/i));
+  assert.ok(within(calculator).getAllByText("Unavailable").length >= 2);
+});
+
 test("renders the Location section, two markers, fitted bounds, distance, commute, directions, and attribution", async () => {
   const listing = createListing();
   const campus = createCampus();
