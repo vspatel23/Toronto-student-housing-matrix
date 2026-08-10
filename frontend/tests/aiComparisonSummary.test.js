@@ -17,6 +17,12 @@ const UNKNOWN_LISTING_ID = "64b000000000000000000099";
 const FOURTH_LISTING_ID = "64b000000000000000000004";
 const AUTH_TOKEN = "issue-64-test-token";
 const CAMPUS = "Toronto Metropolitan University";
+const VALUE_SCORE_WEIGHTS = {
+  affordability: 35,
+  commute: 25,
+  safety: 25,
+  amenities: 15,
+};
 
 const createListing = (index, overrides = {}) => ({
   _id: LISTING_IDS[index],
@@ -163,12 +169,16 @@ const setupUser = () => userEvent.setup({ document: window.document });
 const renderAiSummary = ({
   listings = ALL_LISTINGS.slice(0, 2),
   listingIds = listings.map((listing) => listing._id),
+  campus = CAMPUS,
+  valueScoreWeights = VALUE_SCORE_WEIGHTS,
   requestRecommendation = createRequestSpy(),
 } = {}) =>
   render(
     React.createElement(AiComparisonSummary, {
       listings,
       listingIds,
+      campus,
+      valueScoreWeights,
       requestRecommendation,
     }),
   );
@@ -183,6 +193,7 @@ const createCompareProps = (overrides = {}) => ({
   listingIds: LISTING_IDS.slice(0, 2),
   availableListings: ALL_LISTINGS,
   campus: CAMPUS,
+  valueScoreWeights: VALUE_SCORE_WEIGHTS,
   maxCompareListings: 3,
   savedListingIds: new Set(),
   savingListingIds: new Set(),
@@ -278,6 +289,11 @@ test("generation sends exact ordered IDs and exposes accessible loading without 
   ]);
   assert.equal(requestRecommendation.calls[0][1].authToken, AUTH_TOKEN);
   assert.equal(requestRecommendation.calls[0][1].signal.aborted, false);
+  assert.equal(requestRecommendation.calls[0][1].campus, CAMPUS);
+  assert.deepEqual(
+    requestRecommendation.calls[0][1].valueScoreWeights,
+    VALUE_SCORE_WEIGHTS,
+  );
   assert.equal(generateButton.disabled, true);
   assert.equal(getAiSection().getAttribute("aria-busy"), "true");
 
@@ -568,6 +584,102 @@ test("selection changes clear prior success and error immediately and update Gen
       "Select at least 2 listings to generate an AI recommendation.",
     ),
   );
+});
+
+test("campus and effective score-weight changes invalidate prior AI guidance", async () => {
+  const requestRecommendation = createRequestSpy(async () =>
+    createRecommendation(),
+  );
+  const user = setupUser();
+  const view = renderAiSummary({ requestRecommendation });
+  const recommendationText =
+    "Choose listing Annex Student Room, which has the highest existing Value Score at 89/100.";
+
+  await user.click(
+    screen.getByRole("button", { name: "Generate AI Recommendation" }),
+  );
+  await screen.findByText(recommendationText);
+
+  view.rerender(
+    React.createElement(AiComparisonSummary, {
+      listings: ALL_LISTINGS.slice(0, 2),
+      listingIds: LISTING_IDS.slice(0, 2),
+      campus: "York University -- Keele",
+      valueScoreWeights: VALUE_SCORE_WEIGHTS,
+      requestRecommendation,
+    }),
+  );
+
+  assert.equal(screen.queryByText(recommendationText), null);
+  await user.click(
+    screen.getByRole("button", { name: "Generate AI Recommendation" }),
+  );
+  await screen.findByText(recommendationText);
+  assert.equal(
+    requestRecommendation.calls[1][1].campus,
+    "York University -- Keele",
+  );
+
+  view.rerender(
+    React.createElement(AiComparisonSummary, {
+      listings: ALL_LISTINGS.slice(0, 2),
+      listingIds: LISTING_IDS.slice(0, 2),
+      campus: "York University -- Keele",
+      valueScoreWeights: {
+        affordability: 80,
+        commute: 80,
+        safety: 20,
+        amenities: 20,
+      },
+      requestRecommendation,
+    }),
+  );
+
+  assert.equal(screen.queryByText(recommendationText), null);
+  await user.click(
+    screen.getByRole("button", { name: "Generate AI Recommendation" }),
+  );
+  await screen.findByText(recommendationText);
+  assert.deepEqual(requestRecommendation.calls[2][1].valueScoreWeights, {
+    affordability: 40,
+    commute: 40,
+    safety: 10,
+    amenities: 10,
+  });
+});
+
+test("proportional score weights preserve the current AI result identity", async () => {
+  const requestRecommendation = createRequestSpy(async () =>
+    createRecommendation(),
+  );
+  const user = setupUser();
+  const view = renderAiSummary({ requestRecommendation });
+  const recommendationText =
+    "Choose listing Annex Student Room, which has the highest existing Value Score at 89/100.";
+
+  await user.click(
+    screen.getByRole("button", { name: "Generate AI Recommendation" }),
+  );
+  await screen.findByText(recommendationText);
+
+  view.rerender(
+    React.createElement(AiComparisonSummary, {
+      listings: ALL_LISTINGS.slice(0, 2),
+      listingIds: LISTING_IDS.slice(0, 2),
+      campus: CAMPUS,
+      valueScoreWeights: {
+        affordability: 70,
+        commute: 50,
+        safety: 50,
+        amenities: 30,
+      },
+      requestRecommendation,
+    }),
+  );
+
+  assert.ok(screen.getByText(recommendationText));
+  assert.ok(screen.getByRole("button", { name: "Regenerate" }));
+  assert.equal(requestRecommendation.calls.length, 1);
 });
 
 test("an old in-flight response is aborted and ignored after selection replacement", async () => {

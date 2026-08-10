@@ -733,7 +733,7 @@ test("existing comparison rows, badges, summary, controls, and limit remain visi
   assert.equal(view.queryByRole("button", { name: "Add Listing" }), null);
 });
 
-test("AI generation remains independent and receives only ordered IDs plus options", async () => {
+test("AI generation receives score context without monthly-cost state", async () => {
   const user = setupUser();
   const requestRecommendation = createRequestSpy();
   const orderedListings = [ALL_LISTINGS[2], ALL_LISTINGS[0], ALL_LISTINGS[1]];
@@ -756,8 +756,20 @@ test("AI generation remains independent and receives only ordered IDs plus optio
     orderedListings.map((listing) => listing._id),
   );
   const requestOptions = requestRecommendation.calls[0][1];
-  assert.deepEqual(Object.keys(requestOptions).sort(), ["authToken", "signal"]);
+  assert.deepEqual(Object.keys(requestOptions).sort(), [
+    "authToken",
+    "campus",
+    "signal",
+    "valueScoreWeights",
+  ]);
   assert.equal(requestOptions.authToken, AUTH_TOKEN);
+  assert.equal(requestOptions.campus, CAMPUS);
+  assert.deepEqual(requestOptions.valueScoreWeights, {
+    affordability: 35,
+    commute: 25,
+    safety: 25,
+    amenities: 15,
+  });
   assert.equal(requestOptions.signal instanceof AbortSignal, true);
   assert.equal("estimatedMonthlyCost" in requestOptions, false);
   assert.equal("monthlyCostAssumptions" in requestOptions, false);

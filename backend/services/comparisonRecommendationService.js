@@ -9,10 +9,12 @@ const {
 } = require("../utils/comparisonGrounding");
 const {
   VALUE_SCORE_WEIGHTS,
-  calculateValueScore,
+  VALUE_SCORE_WEIGHT_KEYS,
   calculateValueScoreBreakdown,
+  calculateWeightedValueScoreFromBreakdown,
   getAvailableSafetyScore,
   getCommuteEstimate,
+  normalizeValueScoreWeights,
 } = require("../utils/valueScore");
 const {
   AIOutputValidationError,
@@ -22,6 +24,7 @@ const {
   ComparisonServiceError,
   createComparisonServiceUnavailableError,
   createDuplicateListingIdsError,
+  createInvalidComparisonContextError,
   createInvalidComparisonCountError,
   createInvalidListingIdError,
   createListingInactiveError,
@@ -37,15 +40,10 @@ const LISTING_COMPARISON_PROJECTION =
 
 const PREFERENCE_COMPARISON_PROJECTION =
   "campus minRent maxRent maxBudget housingType maxCommute safetyLevel " +
-  "minimumSafetyLevel amenities weights";
+  "minimumSafetyLevel amenities";
 
 const CANONICAL_LISTING_ID_PATTERN = /^[0-9a-f]{24}$/i;
-const LEGACY_PREFERENCE_WEIGHT_FIELDS = Object.freeze([
-  "rent",
-  "commute",
-  "safety",
-  "amenities",
-]);
+const MAX_COMPARISON_CAMPUS_LENGTH = 160;
 
 const normalizeComparisonListingIds = (listingIds) => {
   if (
@@ -74,6 +72,55 @@ const normalizeComparisonListingIds = (listingIds) => {
   }
 
   return normalizedIds;
+};
+
+const isPlainObject = (value) =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  (Object.getPrototypeOf(value) === Object.prototype ||
+    Object.getPrototypeOf(value) === null);
+
+const normalizeComparisonContext = (campus, valueScoreWeights) => {
+  const validCampus =
+    campus === null ||
+    (typeof campus === "string" &&
+      campus.length > 0 &&
+      campus.length <= MAX_COMPARISON_CAMPUS_LENGTH &&
+      campus.trim() === campus &&
+      !/[\u0000-\u001f\u007f]/.test(campus));
+  const weightKeys = isPlainObject(valueScoreWeights)
+    ? Object.keys(valueScoreWeights)
+    : [];
+  const validWeightKeys =
+    weightKeys.length === VALUE_SCORE_WEIGHT_KEYS.length &&
+    VALUE_SCORE_WEIGHT_KEYS.every((key) => weightKeys.includes(key));
+  const validWeightValues =
+    validWeightKeys &&
+    VALUE_SCORE_WEIGHT_KEYS.every((key) => {
+      const weight = valueScoreWeights[key];
+      return (
+        typeof weight === "number" &&
+        Number.isFinite(weight) &&
+        weight >= 0 &&
+        weight <= 100
+      );
+    });
+  const totalWeight = validWeightValues
+    ? VALUE_SCORE_WEIGHT_KEYS.reduce(
+        (total, key) => total + valueScoreWeights[key],
+        0,
+      )
+    : 0;
+
+  if (!validCampus || !validWeightValues || totalWeight <= 0) {
+    throw createInvalidComparisonContextError();
+  }
+
+  return {
+    campus,
+    valueScoreWeights: normalizeValueScoreWeights(valueScoreWeights),
+  };
 };
 
 const toPlainObject = (value) => {
@@ -112,21 +159,6 @@ const sanitizeAmenities = (amenities) =>
         .filter(Boolean)
     : [];
 
-const sanitizeLegacyWeights = (weights) => {
-  const plainWeights = toPlainObject(weights);
-
-  if (!plainWeights) {
-    return null;
-  }
-
-  return Object.fromEntries(
-    LEGACY_PREFERENCE_WEIGHT_FIELDS.map((field) => [
-      field,
-      toNullableFiniteNumber(plainWeights[field], { minimum: 0 }),
-    ]),
-  );
-};
-
 const sanitizePreference = (preferenceDocument) => {
   const preference = toPlainObject(preferenceDocument);
 
@@ -144,7 +176,6 @@ const sanitizePreference = (preferenceDocument) => {
     safetyLevel: toNullableString(preference.safetyLevel),
     minimumSafetyLevel: toNullableString(preference.minimumSafetyLevel),
     amenities: sanitizeAmenities(preference.amenities),
-    weights: sanitizeLegacyWeights(preference.weights),
   };
 };
 
@@ -200,55 +231,20 @@ const sanitizeValueScoreBreakdown = (breakdownValue) => {
   };
 };
 
-const calculatePreferenceWeightedValueScore = (breakdown, weights) => {
-  if (!weights) {
-    return null;
-  }
-
-  const weightedComponents = [
-    [breakdown.affordability, weights.rent],
-    [breakdown.commute, weights.commute],
-    [breakdown.safety, weights.safety],
-    [breakdown.amenities, weights.amenities],
-  ];
-
-  if (
-    weightedComponents.some(
-      ([score, weight]) =>
-        !Number.isFinite(score) || !Number.isFinite(weight) || weight < 0,
-    )
-  ) {
-    return null;
-  }
-
-  const totalWeight = weightedComponents.reduce(
-    (total, [, weight]) => total + weight,
-    0,
-  );
-
-  if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
-    return null;
-  }
-
-  const score = weightedComponents.reduce(
-    (total, [componentScore, weight]) =>
-      total + componentScore * (weight / totalWeight),
-    0,
-  );
-
-  return Math.max(0, Math.min(100, Math.round(score)));
-};
-
 const sanitizeListing = (
   listing,
   id,
   campus,
-  preferenceWeights,
-  calculateValueScoreImpl,
+  valueScoreWeights,
   calculateValueScoreBreakdownImpl,
 ) => {
   const valueScoreBreakdown = sanitizeValueScoreBreakdown(
     calculateValueScoreBreakdownImpl(listing, campus),
+  );
+
+  const valueScore = calculateWeightedValueScoreFromBreakdown(
+    valueScoreBreakdown,
+    valueScoreWeights,
   );
 
   return {
@@ -262,15 +258,8 @@ const sanitizeListing = (
     commute: sanitizeCommute(listing, campus),
     safety: sanitizeSafety(listing.safety),
     amenities: sanitizeAmenities(listing.amenities),
-    valueScore: toNullableFiniteNumber(
-      calculateValueScoreImpl(listing, campus),
-      { minimum: 0 },
-    ),
+    valueScore,
     valueScoreBreakdown,
-    preferenceWeightedValueScore: calculatePreferenceWeightedValueScore(
-      valueScoreBreakdown,
-      preferenceWeights,
-    ),
   };
 };
 
@@ -295,8 +284,7 @@ const findWinnerCandidates = (listings, getMetric, direction) => {
 const buildCategoryCandidates = (listingContexts, orderedListings) => ({
   bestOverall: findWinnerCandidates(
     listingContexts,
-    (listing) =>
-      listing.preferenceWeightedValueScore ?? listing.valueScore,
+    (listing) => listing.valueScore,
     "max",
   ),
   bestBudget: findWinnerCandidates(
@@ -355,16 +343,35 @@ const createComparisonRecommendationService = ({
   SavedPreferenceModel = SavedPreference,
   generateComparisonRecommendation =
     openRouterService.generateComparisonRecommendation,
-  calculateValueScoreImpl = calculateValueScore,
   calculateValueScoreBreakdownImpl = calculateValueScoreBreakdown,
 } = {}) => ({
   async recommendComparison(input = {}) {
     try {
-      const { listingIds, userId } =
+      const normalizedInput =
         input && typeof input === "object" && !Array.isArray(input)
           ? input
           : {};
+      const { listingIds, userId } = normalizedInput;
       const normalizedListingIds = normalizeComparisonListingIds(listingIds);
+      const hasCampus = Object.prototype.hasOwnProperty.call(
+        normalizedInput,
+        "campus",
+      );
+      const hasValueScoreWeights = Object.prototype.hasOwnProperty.call(
+        normalizedInput,
+        "valueScoreWeights",
+      );
+
+      if (hasCampus !== hasValueScoreWeights) {
+        throw createInvalidComparisonContextError();
+      }
+
+      const suppliedContext = hasCampus
+        ? normalizeComparisonContext(
+            normalizedInput.campus,
+            normalizedInput.valueScoreWeights,
+          )
+        : null;
       const listingDocuments = await loadListings(
         HousingListingModel,
         normalizedListingIds,
@@ -392,15 +399,22 @@ const createComparisonRecommendationService = ({
         SavedPreferenceModel,
         userId,
       );
-      const preferences = sanitizePreference(preferenceDocument);
-      const campus = preferences?.campus || null;
+      const savedPreferences = sanitizePreference(preferenceDocument);
+      const campus = suppliedContext
+        ? suppliedContext.campus
+        : savedPreferences?.campus || null;
+      const valueScoreWeights = suppliedContext
+        ? suppliedContext.valueScoreWeights
+        : { ...VALUE_SCORE_WEIGHTS };
+      const preferences = savedPreferences
+        ? { ...savedPreferences, campus }
+        : null;
       const listingContexts = orderedListings.map((listing, index) =>
         sanitizeListing(
           listing,
           normalizedListingIds[index],
           campus,
-          preferences?.weights || null,
-          calculateValueScoreImpl,
+          valueScoreWeights,
           calculateValueScoreBreakdownImpl,
         ),
       );
@@ -422,8 +436,9 @@ const createComparisonRecommendationService = ({
       );
       const context = {
         listings: listingContexts,
+        campus,
         preferences,
-        valueScoreWeights: { ...VALUE_SCORE_WEIGHTS },
+        valueScoreWeights: { ...valueScoreWeights },
         categoryCandidates: Object.fromEntries(
           Object.entries(categoryCandidates).map(([category, ids]) => [
             category,
@@ -474,7 +489,9 @@ const defaultComparisonRecommendationService =
 module.exports = {
   LISTING_COMPARISON_PROJECTION,
   PREFERENCE_COMPARISON_PROJECTION,
+  MAX_COMPARISON_CAMPUS_LENGTH,
   createComparisonRecommendationService,
+  normalizeComparisonContext,
   normalizeComparisonListingIds,
   recommendComparison: (options) =>
     defaultComparisonRecommendationService.recommendComparison(options),

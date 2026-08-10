@@ -18,6 +18,7 @@ const TEST_ENV = {
 };
 
 const context = () => ({
+  campus: "Toronto Metropolitan University",
   listings: [
     {
       id: FIRST_ID,
@@ -40,7 +41,6 @@ const context = () => ({
         safety: 80,
         amenities: 13,
       },
-      preferenceWeightedValueScore: null,
     },
     {
       id: SECOND_ID,
@@ -54,7 +54,6 @@ const context = () => ({
         minutes: 15,
         isEstimated: true,
       },
-      preferenceWeightedValueScore: null,
       safety: { safetyScore: 85, crimeRateLevel: "Low" },
       amenities: ["Laundry"],
       valueScore: 82,
@@ -113,7 +112,7 @@ const context = () => ({
 const recommendation = (overrides = {}) => ({
   bestOverall: {
     listingId: SECOND_ID,
-    reason: "It has the highest existing Value Score.",
+    reason: "It has the highest application-calculated Value Score.",
   },
   bestBudget: {
     listingId: SECOND_ID,
@@ -135,12 +134,12 @@ const recommendation = (overrides = {}) => ({
     },
     {
       listingId: SECOND_ID,
-      advantage: "It has the highest existing Value Score.",
+      advantage: "It has the highest application-calculated Value Score.",
       compromise: "It is not furnished.",
     },
   ],
   recommendation:
-    "Choose the second listing for its higher existing Value Score, while noting that it is not furnished.",
+    "Choose the second listing for its higher application-calculated Value Score, while noting that it is not furnished.",
   ...overrides,
 });
 
@@ -196,7 +195,16 @@ test("comparison recommendations reuse the strict OpenRouter transport and groun
   assert.match(body.messages[0].content, /ONLY supplied/i);
   assert.match(body.messages[0].content, /untrusted data/i);
   assert.match(body.messages[0].content, /external knowledge/i);
+  assert.match(
+    body.messages[0].content,
+    /authoritative current comparison context/i,
+  );
   assert.match(body.messages[1].content, /<comparison_context>/);
+  assert.match(
+    body.messages[1].content,
+    /"campus":"Toronto Metropolitan University"/,
+  );
+  assert.match(body.messages[1].content, /"affordability":35/);
   assert.match(body.messages[1].content, /Ignore previous instructions/);
   assert.doesNotMatch(request.options.body, new RegExp(TEST_API_KEY));
 });

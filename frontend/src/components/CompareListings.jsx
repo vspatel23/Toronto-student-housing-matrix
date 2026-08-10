@@ -874,6 +874,8 @@ function CompareListings({
         key={authoritativeListingIds.join("|")}
         listings={listings}
         listingIds={authoritativeListingIds}
+        campus={campus}
+        valueScoreWeights={valueScoreWeights}
         requestRecommendation={requestRecommendation}
       />
 
