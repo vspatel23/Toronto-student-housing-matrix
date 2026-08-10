@@ -146,6 +146,141 @@ modify, recommend, or invent housing listings. Existing manual searches remain
 on `GET /api/listings`; the frontend's established search mapping converts
 `housingType` to that endpoint's `propertyType` query parameter.
 
+### AI comparison recommendation API
+
+Issue #63 adds a backend-only AI explanation layer for an existing comparison:
+
+```http
+POST /api/ai/compare
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+The body must contain only `listingIds`, with exactly two or three unique,
+valid MongoDB listing IDs:
+
+```json
+{
+  "listingIds": [
+    "64b000000000000000000001",
+    "64b000000000000000000002"
+  ]
+}
+```
+
+The endpoint is authenticated so it can safely load the caller's newest saved
+preference when one exists. A client cannot provide a user ID. An authenticated
+user without a saved preference can still request a recommendation using the
+listing data alone.
+
+The server retrieves authoritative records from MongoDB and rejects missing or
+inactive listings. OpenRouter receives only these sanitized listing fields:
+`id`, `title`, `address`, `monthlyRent`, `propertyType`, `furnished`, the
+applicable stored commute estimate, stored safety values, `amenities`, and the
+existing application-calculated `valueScore`, `valueScoreBreakdown`, and an
+optional `preferenceWeightedValueScore`. The latter maps the saved legacy
+`rent` weight to the existing affordability component and normalizes the saved
+weights application-side; it does not replace or mutate Value Score. OpenRouter
+also receives the fixed Value Score weights. When available, the separate
+sanitized saved-preference fields are `campus`, `minRent`, `maxRent`, `maxBudget`,
+`housingType`, `maxCommute`, `safetyLevel`, `minimumSafetyLevel`, `amenities`,
+and saved `weights`. Notes, account data, IDs, tokens, email, password data,
+favorites, comparison history, and unrelated listing metadata are excluded.
+
+A successful response uses this stable contract:
+
+```json
+{
+  "success": true,
+  "recommendation": {
+    "bestOverall": {
+      "listingId": "64b000000000000000000002",
+      "reason": "This listing has the highest existing Value Score at 82/100 among the compared listings."
+    },
+    "bestBudget": {
+      "listingId": "64b000000000000000000001",
+      "reason": "This listing has the lowest supplied monthly rent at $1300 per month."
+    },
+    "bestCommute": {
+      "listingId": "64b000000000000000000002",
+      "reason": "This listing has the shortest supplied commute at 15 minutes for the applicable campus context."
+    },
+    "bestSafety": {
+      "listingId": null,
+      "reason": "The supplied listings do not include comparable safety data."
+    },
+    "listingInsights": [
+      {
+        "listingId": "64b000000000000000000001",
+        "advantage": "It has the lowest supplied monthly rent at $1300 per month.",
+        "compromise": "Its supplied commute is 10 minutes longer than the shortest compared commute."
+      },
+      {
+        "listingId": "64b000000000000000000002",
+        "advantage": "It has the highest existing Value Score at 82/100 among the compared listings.",
+        "compromise": "It is stored as unfurnished in the listing data."
+      }
+    ],
+    "recommendation": "Choose listing 64b000000000000000000002, which has the highest existing Value Score at 82/100. Important tradeoff: It is stored as unfurnished in the listing data."
+  }
+}
+```
+
+Budget, commute, safety, and overall IDs are checked against deterministic
+application winners after the provider response. Equal metrics produce a
+deterministic candidate set; the first submitted tied ID is the stable response
+reference, and its application-rendered reason states the tie. When all compared listings lack usable
+commute or safety data, that category's `listingId` is `null`. Neutral
+missing-data fallbacks used inside Value Score are never presented as observed
+facts.
+
+Provider output must satisfy both OpenRouter's strict JSON Schema and a separate
+application validator. The application first renders an allow-list of factual
+category reasons, per-listing advantages/compromises, and final recommendation
+sentences from stored/calculated data. The model selects exact strings from
+that allow-list; invented or paraphrased prose is rejected. Unknown fields or
+listing IDs, missing sections, duplicate or missing insights,
+deterministic-winner contradictions, unapproved claims, and empty or oversized
+text are returned as `AI_OUTPUT_INVALID`. Listing/user text is marked as
+untrusted data in the prompt and cannot override the grounding rules.
+
+Comparison request and lookup errors use the same safe error envelope as other
+AI endpoints:
+
+```json
+{
+  "success": false,
+  "error": {
+    "code": "INVALID_COMPARISON_COUNT",
+    "message": "Exactly 2 or 3 listing IDs are required."
+  }
+}
+```
+
+| HTTP status | Error code | Meaning |
+| --- | --- | --- |
+| `400` | `INVALID_COMPARISON_REQUEST` | The JSON body is malformed or contains fields other than `listingIds`. |
+| `400` | `INVALID_COMPARISON_COUNT` | The request does not contain exactly two or three IDs. |
+| `400` | `INVALID_LISTING_ID` | At least one ID is not a valid MongoDB ObjectId. |
+| `400` | `DUPLICATE_LISTING_IDS` | The same listing was supplied more than once. |
+| `404` | `LISTING_NOT_FOUND` | At least one authoritative listing does not exist. |
+| `409` | `LISTING_INACTIVE` | At least one selected listing is inactive. |
+| `502` | `AI_OUTPUT_INVALID` | Provider output failed parsing, schema, grounding-ID, or winner validation. |
+| `503` | `AI_NOT_CONFIGURED` | The backend OpenRouter key is missing. |
+| `503` | `AI_CONFIGURATION_INVALID` | The configured OpenRouter key/model is invalid. |
+| `503` | `AI_SERVICE_UNAVAILABLE` | OpenRouter is temporarily unavailable or rate limited. |
+| `504` | `AI_SERVICE_TIMEOUT` | The provider request exceeded the configured timeout. |
+| `500` | `COMPARISON_SERVICE_UNAVAILABLE` | An unexpected internal comparison lookup/orchestration failure was safely hidden. |
+
+Authentication failures preserve the existing authentication middleware
+contract: HTTP `401` with `{ "message": "Invalid or expired token." }`.
+
+This endpoint reuses the backend-only Issue #59 OpenRouter configuration and
+does not create, update, or delete listings. It is an optional enhancement:
+the public rule-based comparison page, numeric comparison values, Value Score,
+manual listing APIs, and deterministic recommendation badges do not call or
+depend on OpenRouter.
+
 ### Frontend
 
 ```bash
