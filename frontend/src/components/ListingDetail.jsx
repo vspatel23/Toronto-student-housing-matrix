@@ -1,5 +1,6 @@
 import ListingBadges from "./ListingBadges";
 import ListingImageGallery from "./ListingImageGallery";
+import ListingLocationSection from "./ListingLocationSection";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -42,6 +43,9 @@ function DetailStat({ label, children, featured = false }) {
 function ListingDetail({
   listing,
   campus,
+  selectedCampus,
+  isLoadingCampus = false,
+  campusError = "",
   badges = [],
   isLoading,
   errorMessage,
@@ -182,8 +186,10 @@ function ListingDetail({
               {formatRent(listing.monthlyRent ?? listing.rent)}
             </DetailStat>
             <DetailStat label="Estimated commute">
-              {formatCommute(listing, campus)}
-              {campus && <small>to {campus}</small>}
+              {campus ? formatCommute(listing, campus) : DATA_UNAVAILABLE}
+              <small>
+                {campus ? `to ${campus}` : "Select a campus to compare"}
+              </small>
             </DetailStat>
             <DetailStat label="Safety level">
               <span className={`safety-badge ${safetyClass}`}>
@@ -196,6 +202,14 @@ function ListingDetail({
               {formatFurnishedStatus(listing.furnished)}
             </DetailStat>
           </dl>
+
+          <ListingLocationSection
+            listing={listing}
+            campus={campus}
+            selectedCampus={selectedCampus}
+            isLoadingCampus={isLoadingCampus}
+            campusError={campusError}
+          />
 
           <div className="detail-decision-grid">
             <div className="detail-main-column">
