@@ -1,6 +1,6 @@
 import ListingBadges from "./ListingBadges";
 import ListingImageGallery from "./ListingImageGallery";
-import ListingLocationSection from "./ListingLocationSection";
+import ListingLocationExperience from "./ListingLocationExperience";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -60,6 +60,7 @@ function ListingDetail({
   maxCompareListings = 3,
   onCompareListing,
   valueScoreWeights,
+  loadNearbyPlaces,
 }) {
   const amenities = getAmenities(listing);
   const description = getDescription(listing);
@@ -203,12 +204,13 @@ function ListingDetail({
             </DetailStat>
           </dl>
 
-          <ListingLocationSection
+          <ListingLocationExperience
             listing={listing}
             campus={campus}
             selectedCampus={selectedCampus}
             isLoadingCampus={isLoadingCampus}
             campusError={campusError}
+            loadNearbyPlaces={loadNearbyPlaces}
           />
 
           <div className="detail-decision-grid">

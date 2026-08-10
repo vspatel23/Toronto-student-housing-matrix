@@ -21,23 +21,36 @@ import {
 import {
   createCampusIcon,
   createListingIcon,
+  createNearbyPlaceIcon,
   getMapPointKey,
   OSM_ATTRIBUTION,
   OSM_TILE_URL,
 } from "../utils/mapPresentation";
+import {
+  getNearbyPlaceCategoryLabel,
+  getNearbyPlaceCategoryMarkerGlyph,
+} from "../utils/nearbyPlaceCategories";
+import { getNearbyPlaceCoordinates } from "../utils/nearbyPlaces";
 import {
   getListingTitle,
   getLocationLabel,
 } from "../utils/listingFormatters";
 import MapAccessibilityController from "./MapAccessibilityController";
 import MapBoundsController from "./MapBoundsController";
+import MapFocusController from "./MapFocusController";
 
 const TILE_LOAD_TIMEOUT_MS = 12000;
 
 const getAddress = (entity) =>
   typeof entity?.address === "string" ? entity.address.trim() : "";
 
-function ListingLocationMap({ listing, selectedCampus }) {
+function ListingLocationMap({
+  listing,
+  selectedCampus,
+  nearbyPlaces = [],
+  selectedPlaceId = "",
+  onSelectNearbyPlace,
+}) {
   const [providerResult, setProviderResult] = useState({
     attemptKey: "",
     hasLoadedPreviousArea: false,
@@ -71,8 +84,47 @@ function ListingLocationMap({ listing, selectedCampus }) {
     () =>
       createCampusIcon(
         markersAreNearby ? { horizontalOffset: -18 } : undefined,
-      ),
+    ),
     [markersAreNearby],
+  );
+  const normalizedSelectedPlaceId =
+    selectedPlaceId === null || selectedPlaceId === undefined
+      ? ""
+      : String(selectedPlaceId).trim();
+  const nearbyPlaceMarkers = useMemo(
+    () =>
+      nearbyPlaces
+        .map((place) => {
+          const coordinates = getNearbyPlaceCoordinates(place);
+          const placeId =
+            place?.id === null || place?.id === undefined
+              ? ""
+              : String(place.id).trim();
+
+          if (!coordinates || !placeId) {
+            return null;
+          }
+
+          const categoryLabel = getNearbyPlaceCategoryLabel(place.category);
+          const isSelected = placeId === normalizedSelectedPlaceId;
+
+          return {
+            categoryLabel,
+            coordinates,
+            icon: createNearbyPlaceIcon(
+              getNearbyPlaceCategoryMarkerGlyph(place.category),
+              isSelected,
+            ),
+            isSelected,
+            place,
+            placeId,
+          };
+        })
+        .filter(Boolean),
+    [nearbyPlaces, normalizedSelectedPlaceId],
+  );
+  const selectedNearbyPlaceMarker = nearbyPlaceMarkers.find(
+    ({ isSelected }) => isSelected,
   );
   const mapPoints = useMemo(
     () => [listingCoordinates, campusCoordinates].filter(Boolean),
@@ -96,9 +148,12 @@ function ListingLocationMap({ listing, selectedCampus }) {
     providerResult.attemptKey === tileAttemptKey &&
     providerResult.hasLoadedPreviousArea;
   const campusName = selectedCampus ? getCampusLabel(selectedCampus) : "";
-  const mapLabel = campusCoordinates
+  const mapContextLabel = campusCoordinates
     ? "Map showing listing and selected campus"
     : "Map showing listing location";
+  const mapLabel = nearbyPlaceMarkers.length
+    ? `${mapContextLabel}, with nearby student essentials`
+    : mapContextLabel;
 
   const clearTileTimeout = useCallback(() => {
     if (tileTimeout.current !== null) {
@@ -276,6 +331,9 @@ function ListingLocationMap({ listing, selectedCampus }) {
           label={mapLabel}
           isBusy={providerStatus === "loading"}
         />
+        <MapFocusController
+          coordinates={selectedNearbyPlaceMarker?.coordinates || null}
+        />
 
         <Marker
           icon={listingIcon}
@@ -313,6 +371,44 @@ function ListingLocationMap({ listing, selectedCampus }) {
               </div>
             </Popup>
           </Marker>
+        )}
+
+        {nearbyPlaceMarkers.map(
+          ({
+            categoryLabel,
+            coordinates,
+            icon,
+            isSelected,
+            place,
+            placeId,
+          }) => (
+            <Marker
+              key={placeId}
+              alt={`Nearby ${categoryLabel}: ${place.name}`}
+              eventHandlers={{
+                click: () =>
+                  onSelectNearbyPlace?.(placeId, { source: "marker" }),
+              }}
+              icon={icon}
+              keyboard
+              position={coordinates}
+              title={`Nearby ${categoryLabel}: ${place.name}${
+                isSelected ? " (selected)" : ""
+              }`}
+              zIndexOffset={isSelected ? 900 : 100}
+            >
+              <Tooltip className="nearby-place-map-tooltip" direction="top">
+                {place.name} · {categoryLabel}
+                {isSelected ? " · Selected" : ""}
+              </Tooltip>
+              <Popup>
+                <div className="map-popup">
+                  <strong>{place.name}</strong>
+                  <span>{categoryLabel}</span>
+                </div>
+              </Popup>
+            </Marker>
+          ),
         )}
       </MapContainer>
 

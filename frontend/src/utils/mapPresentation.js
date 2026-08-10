@@ -33,5 +33,26 @@ export const createCampusIcon = ({ horizontalOffset = 0 } = {}) =>
     tooltipAnchor: [-horizontalOffset, -20],
   });
 
+const escapeMarkerGlyph = (glyph) =>
+  String(glyph || "E")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+
+export const createNearbyPlaceIcon = (markerGlyph, isActive = false) => {
+  const markerSize = isActive ? 34 : 30;
+
+  return L.divIcon({
+    className: `nearby-place-map-marker${isActive ? " active" : ""}`,
+    html: `<span aria-hidden="true">${escapeMarkerGlyph(markerGlyph)}</span>`,
+    iconAnchor: [markerSize / 2, markerSize / 2],
+    iconSize: [markerSize, markerSize],
+    popupAnchor: [0, -(markerSize / 2 + 3)],
+    tooltipAnchor: [0, -(markerSize / 2 + 3)],
+  });
+};
+
 export const getMapPointKey = (point) =>
   `${point[0].toFixed(6)},${point[1].toFixed(6)}`;
