@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from "react";
 import AiComparisonSummary from "./AiComparisonSummary";
 import ListingBadges from "./ListingBadges";
 import ListingImage from "./ListingImage";
+import MonthlyCostComparison from "./MonthlyCostComparison";
 import {
   DATA_UNAVAILABLE,
   formatCommute,
@@ -574,6 +575,8 @@ function CompareListings({
           />
         </aside>
       )}
+
+      <MonthlyCostComparison listings={listings} />
 
       {listings.length > 0 && (
         <>

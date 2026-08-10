@@ -143,11 +143,18 @@ export const normalizeListingRent = (listingRent) => {
   return fromCents(rentCents);
 };
 
-export const createDefaultHousingCosts = (listingRent) => ({
-  advertisedRent: normalizeListingRent(listingRent),
+export const createDefaultHousingCostAssumptions = () => ({
   expenses: { ...HOUSING_COST_DEFAULTS },
   enabled: { ...HOUSING_COST_DEFAULT_ENABLED },
 });
+
+export const createDefaultHousingCosts = (listingRent) => ({
+  advertisedRent: normalizeListingRent(listingRent),
+  ...createDefaultHousingCostAssumptions(),
+});
+
+export const resetHousingCostAssumptions = () =>
+  createDefaultHousingCostAssumptions();
 
 export const resetHousingCosts = (listingRent) =>
   createDefaultHousingCosts(listingRent);
@@ -278,6 +285,86 @@ export const calculateMonthlyHousingCost = (housingCosts) => {
     ),
     fieldErrors,
     unavailableReason: "",
+  };
+};
+
+export const calculateComparisonMonthlyCosts = (
+  listingRents,
+  assumptions = createDefaultHousingCostAssumptions(),
+) => {
+  const sharedAssumptions =
+    assumptions === null
+      ? createDefaultHousingCostAssumptions()
+      : assumptions;
+  const rents = Array.isArray(listingRents) ? listingRents : [];
+  const baseCalculations = rents.map((advertisedRent) =>
+    calculateMonthlyHousingCost({
+      advertisedRent,
+      expenses: sharedAssumptions?.expenses,
+      enabled: sharedAssumptions?.enabled,
+    }),
+  );
+
+  const lowestTotalCents = baseCalculations.reduce(
+    (lowestCents, calculation) => {
+      if (!calculation.isAvailable) {
+        return lowestCents;
+      }
+
+      const totalCents = toSafeCents(calculation.estimatedMonthlyTotal);
+      if (totalCents === null) {
+        return lowestCents;
+      }
+
+      return lowestCents === null || totalCents < lowestCents
+        ? totalCents
+        : lowestCents;
+    },
+    null,
+  );
+
+  const lowestCount =
+    lowestTotalCents === null
+      ? 0
+      : baseCalculations.reduce((count, calculation) => {
+          if (!calculation.isAvailable) {
+            return count;
+          }
+
+          return toSafeCents(calculation.estimatedMonthlyTotal) ===
+            lowestTotalCents
+            ? count + 1
+            : count;
+        }, 0);
+  const hasLowestTie = lowestCount > 1;
+
+  const calculations = baseCalculations.map((calculation) => {
+    if (!calculation.isAvailable || lowestTotalCents === null) {
+      return {
+        ...calculation,
+        differenceFromLowest: null,
+        isLowest: false,
+        isLowestTie: false,
+      };
+    }
+
+    const totalCents = toSafeCents(calculation.estimatedMonthlyTotal);
+    const isLowest = totalCents === lowestTotalCents;
+
+    return {
+      ...calculation,
+      differenceFromLowest: fromCents(totalCents - lowestTotalCents),
+      isLowest,
+      isLowestTie: isLowest && hasLowestTie,
+    };
+  });
+
+  return {
+    calculations,
+    lowestEstimatedMonthlyTotal:
+      lowestTotalCents === null ? null : fromCents(lowestTotalCents),
+    lowestCount,
+    hasLowestTie,
   };
 };
 
