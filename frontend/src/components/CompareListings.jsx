@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import AiComparisonSummary from "./AiComparisonSummary";
 import ListingBadges from "./ListingBadges";
 import ListingImage from "./ListingImage";
 import {
@@ -413,6 +414,7 @@ function CompareMobileCard({
 
 function CompareListings({
   listings,
+  listingIds,
   availableListings = [],
   campus,
   compareStatus = { type: "", message: "" },
@@ -426,9 +428,13 @@ function CompareListings({
   onBackToResults,
   backLabel = "Back to Results",
   onDetails,
+  requestRecommendation,
 }) {
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   const pickerTriggerRef = useRef(null);
+  const authoritativeListingIds = Array.isArray(listingIds)
+    ? listingIds
+    : listings.map((listing) => getListingId(listing)).filter(Boolean);
   const selectedIds = useMemo(
     () => new Set(listings.map((listing) => getListingId(listing))),
     [listings],
@@ -860,6 +866,13 @@ function CompareListings({
           </div>
         </>
       )}
+
+      <AiComparisonSummary
+        key={authoritativeListingIds.join("|")}
+        listings={listings}
+        listingIds={authoritativeListingIds}
+        requestRecommendation={requestRecommendation}
+      />
 
       {isPickerOpen && (
         <ComparePicker

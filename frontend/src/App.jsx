@@ -71,12 +71,12 @@ const parseCompareIdsFromQuery = (searchParams) => {
   return Array.from(new Set(ids)).slice(0, MAX_COMPARE_LISTINGS);
 };
 
-const sameIdSet = (a, b) => {
+const sameIdSequence = (a, b) => {
   if (a.length !== b.length) {
     return false;
   }
-  const setA = new Set(a);
-  return b.every((id) => setA.has(id));
+
+  return a.every((id, index) => id === b[index]);
 };
 
 function App() {
@@ -1779,14 +1779,11 @@ function App() {
     }
 
     const queryIds = parseCompareIdsFromQuery(searchParams);
-    if (queryIds.length === 0 || sameIdSet(queryIds, compareListingIdsRef.current)) {
+    if (sameIdSequence(queryIds, compareListingIdsRef.current)) {
       return;
     }
 
     const restoreKey = location.pathname + location.search;
-    if (restoredCompareKeyRef.current === restoreKey) {
-      return;
-    }
     restoredCompareKeyRef.current = restoreKey;
 
     // No isMounted flag: see the /results restoration effect above for why
@@ -2148,6 +2145,7 @@ function App() {
               </div>
               <CompareListings
                 listings={comparedListings}
+                listingIds={compareListingIds}
                 availableListings={comparisonAvailableListings}
                 campus={activeSearch?.campus}
                 compareStatus={compareStatus}
