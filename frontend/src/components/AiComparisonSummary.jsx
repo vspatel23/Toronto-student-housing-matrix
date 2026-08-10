@@ -4,6 +4,7 @@ import {
   formatAiComparisonText,
   getAiComparisonErrorPresentation,
   getAmenityInsights,
+  normalizeAiComparisonContext,
   requestAiComparisonRecommendation,
   validateAiComparisonRecommendation,
 } from "../utils/aiComparison";
@@ -20,7 +21,7 @@ const CATEGORY_CONFIG = [
 ];
 
 const EMPTY_AI_STATE = Object.freeze({
-  selectionKey: "",
+  contextKey: "",
   recommendation: null,
   error: null,
   isLoading: false,
@@ -168,6 +169,8 @@ const createRecommendationView = (
 function AiComparisonSummary({
   listings = [],
   listingIds = [],
+  campus = "",
+  valueScoreWeights,
   requestRecommendation = requestAiComparisonRecommendation,
 }) {
   const headingRef = useRef(null);
@@ -184,10 +187,17 @@ function AiComparisonSummary({
         : [],
     [listingIds],
   );
-  const selectionKey = selectedListingIds
-    .map((listingId) => normalizeListingId(listingId))
-    .join("|");
-  const currentSelectionKeyRef = useRef(selectionKey);
+  const normalizedComparisonContext = normalizeAiComparisonContext({
+    campus,
+    valueScoreWeights,
+  });
+  const contextKey = JSON.stringify({
+    listingIds: selectedListingIds.map((listingId) =>
+      normalizeListingId(listingId),
+    ),
+    ...normalizedComparisonContext,
+  });
+  const currentContextKeyRef = useRef(contextKey);
 
   const titleById = useMemo(
     () =>
@@ -216,18 +226,18 @@ function AiComparisonSummary({
     hasSupportedCount &&
     normalizedSelectedIds.every((listingId) => titleById.has(listingId));
   const isCurrentState =
-    aiState.selectionKey === selectionKey && hasResolvedListings;
+    aiState.contextKey === contextKey && hasResolvedListings;
   const recommendation = isCurrentState ? aiState.recommendation : null;
   const error = isCurrentState ? aiState.error : null;
   const isLoading = isCurrentState ? aiState.isLoading : false;
   const canGenerate = hasSupportedCount && hasValidIds && hasResolvedListings;
 
   useEffect(() => {
-    currentSelectionKeyRef.current = selectionKey;
+    currentContextKeyRef.current = contextKey;
     requestSequenceRef.current += 1;
     activeRequestRef.current?.abort();
     activeRequestRef.current = null;
-  }, [selectionKey]);
+  }, [contextKey]);
 
   useEffect(
     () => () => {
@@ -244,7 +254,7 @@ function AiComparisonSummary({
     }
 
     const requestListingIds = [...selectedListingIds];
-    const requestSelectionKey = selectionKey;
+    const requestContextKey = contextKey;
     const requestId = requestSequenceRef.current + 1;
     requestSequenceRef.current = requestId;
     activeRequestRef.current?.abort();
@@ -252,9 +262,9 @@ function AiComparisonSummary({
     activeRequestRef.current = controller;
 
     setAiState((currentState) => ({
-      selectionKey: requestSelectionKey,
+      contextKey: requestContextKey,
       recommendation:
-        currentState.selectionKey === requestSelectionKey
+        currentState.contextKey === requestContextKey
           ? currentState.recommendation
           : null,
       error: null,
@@ -266,6 +276,7 @@ function AiComparisonSummary({
       const response = await requestRecommendation(requestListingIds, {
         authToken,
         signal: controller.signal,
+        ...normalizedComparisonContext,
       });
       const responseRecommendation =
         response?.success === true && response.recommendation
@@ -275,7 +286,7 @@ function AiComparisonSummary({
       if (
         controller.signal.aborted ||
         requestId !== requestSequenceRef.current ||
-        requestSelectionKey !== currentSelectionKeyRef.current
+        requestContextKey !== currentContextKeyRef.current
       ) {
         return;
       }
@@ -293,13 +304,13 @@ function AiComparisonSummary({
       if (
         controller.signal.aborted ||
         requestId !== requestSequenceRef.current ||
-        requestSelectionKey !== currentSelectionKeyRef.current
+        requestContextKey !== currentContextKeyRef.current
       ) {
         return;
       }
 
       setAiState({
-        selectionKey: requestSelectionKey,
+        contextKey: requestContextKey,
         recommendation: recommendationView,
         error: null,
         isLoading: false,
@@ -309,7 +320,7 @@ function AiComparisonSummary({
       if (
         controller.signal.aborted ||
         requestId !== requestSequenceRef.current ||
-        requestSelectionKey !== currentSelectionKeyRef.current
+        requestContextKey !== currentContextKeyRef.current
       ) {
         return;
       }
@@ -318,9 +329,9 @@ function AiComparisonSummary({
         getAiComparisonErrorPresentation(requestError);
 
       setAiState((currentState) => ({
-        selectionKey: requestSelectionKey,
+        contextKey: requestContextKey,
         recommendation:
-          currentState.selectionKey === requestSelectionKey
+          currentState.contextKey === requestContextKey
             ? currentState.recommendation
             : null,
         error: errorPresentation,

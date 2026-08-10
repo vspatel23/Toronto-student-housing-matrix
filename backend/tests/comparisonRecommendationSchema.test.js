@@ -544,6 +544,18 @@ test("the system prompt includes grounding, injection, tie, and structured-outpu
   assert.match(COMPARISON_RECOMMENDATION_SYSTEM_PROMPT, /missing-data/i);
   assert.match(COMPARISON_RECOMMENDATION_SYSTEM_PROMPT, /approvedGrounding/i);
   assert.match(COMPARISON_RECOMMENDATION_SYSTEM_PROMPT, /categorySelections/i);
+  assert.match(
+    COMPARISON_RECOMMENDATION_SYSTEM_PROMPT,
+    /campus and valueScoreWeights are the authoritative current comparison context/i,
+  );
+  assert.match(
+    COMPARISON_RECOMMENDATION_SYSTEM_PROMPT,
+    /Saved preferences are explanatory context only/i,
+  );
+  assert.doesNotMatch(
+    COMPARISON_RECOMMENDATION_SYSTEM_PROMPT,
+    /preferenceWeightedValueScore/,
+  );
   assert.match(COMPARISON_RECOMMENDATION_SYSTEM_PROMPT, /exactly equal/i);
   assert.match(COMPARISON_RECOMMENDATION_SYSTEM_PROMPT, /JSON object only/i);
   assert.match(COMPARISON_RECOMMENDATION_SYSTEM_PROMPT, /exactly one listing insight/i);
@@ -551,6 +563,13 @@ test("the system prompt includes grounding, injection, tie, and structured-outpu
 
 test("the context builder JSON-wraps supplied context as untrusted data", () => {
   const comparisonContext = {
+    campus: "Toronto Metropolitan University",
+    valueScoreWeights: {
+      affordability: 35,
+      commute: 25,
+      safety: 25,
+      amenities: 15,
+    },
     listings: [
       {
         id: LISTING_IDS[0],

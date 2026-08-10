@@ -39,7 +39,8 @@ const sendError = (res, status, error) =>
 
 const invalidComparisonRequest = () => ({
   code: "INVALID_COMPARISON_REQUEST",
-  message: "Request body must contain only a listingIds array.",
+  message:
+    "Request body must contain only listingIds, campus, and valueScoreWeights.",
 });
 
 const unavailableComparisonService = () => ({
@@ -61,7 +62,9 @@ const validateAiCompareRequest = (req, res, next) => {
   if (
     !isPlainObject(body) ||
     !Object.prototype.hasOwnProperty.call(body, "listingIds") ||
-    Object.keys(body).length !== 1 ||
+    !Object.prototype.hasOwnProperty.call(body, "campus") ||
+    !Object.prototype.hasOwnProperty.call(body, "valueScoreWeights") ||
+    Object.keys(body).length !== 3 ||
     !Array.isArray(body.listingIds)
   ) {
     return sendError(res, 400, invalidComparisonRequest());
@@ -72,6 +75,14 @@ const validateAiCompareRequest = (req, res, next) => {
       comparisonRecommendationService.normalizeComparisonListingIds(
         body.listingIds,
       );
+    const comparisonContext =
+      comparisonRecommendationService.normalizeComparisonContext(
+        body.campus,
+        body.valueScoreWeights,
+      );
+    req.comparisonCampus = comparisonContext.campus;
+    req.comparisonValueScoreWeights =
+      comparisonContext.valueScoreWeights;
     return next();
   } catch (error) {
     if (error instanceof ComparisonServiceError) {
@@ -116,6 +127,8 @@ const createAiCompareRouter = ({
       try {
         const recommendation = await recommendComparison({
           listingIds: req.comparisonListingIds,
+          campus: req.comparisonCampus,
+          valueScoreWeights: req.comparisonValueScoreWeights,
           userId: req.user?._id,
         });
 

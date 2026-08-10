@@ -9,6 +9,9 @@ const VALUE_SCORE_WEIGHT_KEYS = [
   "safety",
   "amenities",
 ];
+const NORMALIZED_WEIGHT_TOTAL = 100;
+const NORMALIZED_WEIGHT_EPSILON = 1e-10;
+const VALUE_SCORE_PRECISION = 1e12;
 
 const hasValue = (value) =>
   value !== undefined && value !== null && String(value).trim() !== "";
@@ -162,17 +165,6 @@ const clampWeight = (weight) => {
   return Math.max(0, Math.min(100, numericWeight));
 };
 
-const getProvidedValueScore = (listing) => {
-  const rawScore =
-    listing?.valueScore?.overall ??
-    listing?.valueScore?.score ??
-    listing?.valueScore ??
-    listing?.score;
-  const score = Number(rawScore);
-
-  return Number.isFinite(score) ? clampScore(score) : null;
-};
-
 const getRentNumber = (listing) => {
   const rent = Number(listing?.monthlyRent ?? listing?.rent);
   return Number.isFinite(rent) && rent >= 0 ? rent : null;
@@ -246,15 +238,9 @@ const getAmenitiesScore = (listing) =>
   clampScore(Math.min(getAmenities(listing).length * 12.5, 100));
 
 export const getValueScoreBreakdown = (listing, campus) => {
-  if (listing?.valueScoreBreakdown) {
-    return {
-      affordability: clampScore(listing.valueScoreBreakdown.affordability),
-      commute: clampScore(listing.valueScoreBreakdown.commute),
-      safety: clampScore(listing.valueScoreBreakdown.safety),
-      amenities: clampScore(listing.valueScoreBreakdown.amenities),
-    };
-  }
-
+  // Derive from the listing's authoritative raw fields for the requested
+  // campus. Cached result, saved, and direct-hydration objects can carry a
+  // server breakdown calculated for a different (or absent) campus.
   return {
     affordability: getAffordabilityScore(listing),
     commute: getCommuteScore(listing, campus),
@@ -282,8 +268,16 @@ export const normalizeValueScoreWeights = (weights) => {
     return { ...DEFAULT_VALUE_SCORE_WEIGHTS };
   }
 
+  if (
+    Math.abs(totalWeight - NORMALIZED_WEIGHT_TOTAL) <=
+    NORMALIZED_WEIGHT_EPSILON
+  ) {
+    return { ...safeWeights };
+  }
+
   return VALUE_SCORE_WEIGHT_KEYS.reduce((normalized, key) => {
-    normalized[key] = (safeWeights[key] / totalWeight) * 100;
+    normalized[key] =
+      (safeWeights[key] / totalWeight) * NORMALIZED_WEIGHT_TOTAL;
     return normalized;
   }, {});
 };
@@ -295,25 +289,19 @@ export const getWeightedValueScore = (listing, campus, weights) => {
     (score, key) => score + breakdown[key] * (normalizedWeights[key] / 100),
     0,
   );
+  const stableWeightedScore =
+    Math.round(weightedScore * VALUE_SCORE_PRECISION) /
+    VALUE_SCORE_PRECISION;
 
-  return clampScore(weightedScore);
+  return clampScore(stableWeightedScore);
 };
 
 export const getValueScore = (listing, campus) => {
-  const providedScore = getProvidedValueScore(listing);
-
-  if (providedScore !== null) {
-    return providedScore;
-  }
-
-  const breakdown = getValueScoreBreakdown(listing, campus);
-
-  // Phase 0 fallback only: affordability 35%, commute 25%, safety 25%,
-  // amenities 15%. Backend valueScore wins when it exists.
-  return clampScore(
-    breakdown.affordability * 0.35 +
-      breakdown.commute * 0.25 +
-      breakdown.safety * 0.25 +
-      breakdown.amenities * 0.15,
+  // Keep the established affordability 35%, commute 25%, safety 25%,
+  // amenities 15% formula, using the current campus-derived breakdown.
+  return getWeightedValueScore(
+    listing,
+    campus,
+    DEFAULT_VALUE_SCORE_WEIGHTS,
   );
 };

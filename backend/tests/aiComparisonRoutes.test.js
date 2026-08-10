@@ -25,6 +25,25 @@ const LISTING_ID_TWO = "0123456789abcdef01234567";
 const LISTING_ID_THREE = "fedcba987654321001234567";
 const CANONICAL_LISTING_ID_ONE = LISTING_ID_ONE.toLowerCase();
 const USER_ID = "aaaaaaaaaaaaaaaaaaaaaaaa";
+const SELECTED_CAMPUS = "Seneca Polytechnic -- Newnham";
+const VALUE_SCORE_WEIGHTS = Object.freeze({
+  affordability: 35,
+  commute: 25,
+  safety: 25,
+  amenities: 15,
+});
+
+const withComparisonContext = (body) =>
+  body &&
+  typeof body === "object" &&
+  !Array.isArray(body) &&
+  Object.prototype.hasOwnProperty.call(body, "listingIds")
+    ? {
+        campus: SELECTED_CAMPUS,
+        valueScoreWeights: { ...VALUE_SCORE_WEIGHTS },
+        ...body,
+      }
+    : body;
 
 const recommendationFixture = (listingIds) => ({
   bestOverall: {
@@ -137,7 +156,7 @@ const postComparison = async (
 
   if (body !== NO_BODY) {
     options.headers = { "Content-Type": "application/json" };
-    options.body = JSON.stringify(body);
+    options.body = JSON.stringify(withComparisonContext(body));
   }
 
   return requestJson(baseUrl, pathname, options);
@@ -174,6 +193,12 @@ test("two listing IDs are canonicalized before the authenticated service call", 
   await withServer(createTestApp({ service, auth }), async (baseUrl) => {
     const result = await postComparison(baseUrl, {
       listingIds: [LISTING_ID_ONE, LISTING_ID_TWO],
+      valueScoreWeights: {
+        affordability: 7,
+        commute: 5,
+        safety: 5,
+        amenities: 3,
+      },
     });
 
     assert.equal(result.response.status, 200);
@@ -182,6 +207,8 @@ test("two listing IDs are canonicalized before the authenticated service call", 
     assert.deepEqual(service.calls, [
       {
         listingIds: expectedIds,
+        campus: SELECTED_CAMPUS,
+        valueScoreWeights: VALUE_SCORE_WEIGHTS,
         userId: USER_ID,
       },
     ]);
@@ -206,6 +233,11 @@ test("three listing IDs return the stable recommendation envelope", async () => 
     assert.equal(result.response.status, 200);
     assert.deepEqual(result.body, { success: true, recommendation });
     assert.deepEqual(service.calls[0].listingIds, expectedIds);
+    assert.equal(service.calls[0].campus, SELECTED_CAMPUS);
+    assert.deepEqual(
+      service.calls[0].valueScoreWeights,
+      VALUE_SCORE_WEIGHTS,
+    );
     assert.equal(auth.calls.length, 1);
   });
 });
@@ -249,6 +281,103 @@ test("invalid request shapes are rejected before authentication or service work"
         const result = await postComparison(baseUrl, testCase.body);
 
         assertErrorResponse(result, 400, "INVALID_COMPARISON_REQUEST");
+        assert.equal(auth.calls.length, 0);
+        assert.equal(service.calls.length, 0);
+      });
+    });
+  }
+});
+
+test("the HTTP contract requires current context and rejects client-calculated data", async (t) => {
+  const cases = [
+    {
+      name: "legacy IDs-only HTTP payload",
+      body: { listingIds: [LISTING_ID_ONE, LISTING_ID_TWO] },
+    },
+    {
+      name: "client-calculated score",
+      body: {
+        listingIds: [LISTING_ID_ONE, LISTING_ID_TWO],
+        campus: SELECTED_CAMPUS,
+        valueScoreWeights: VALUE_SCORE_WEIGHTS,
+        valueScore: 99,
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const service = createServiceStub(async () => {
+        assert.fail("Service must not receive an invalid request.");
+      });
+      const auth = createAuthStub({
+        implementation: () => {
+          assert.fail("Authentication must not run for an invalid request.");
+        },
+      });
+
+      await withServer(createTestApp({ service, auth }), async (baseUrl) => {
+        const result = await requestJson(baseUrl, "/api/ai/compare", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(testCase.body),
+        });
+
+        assertErrorResponse(result, 400, "INVALID_COMPARISON_REQUEST");
+        assert.equal(auth.calls.length, 0);
+        assert.equal(service.calls.length, 0);
+      });
+    });
+  }
+});
+
+test("invalid campus or Value Score weights are rejected before authentication", async (t) => {
+  const cases = [
+    { name: "empty campus", campus: "" },
+    { name: "untrimmed campus", campus: ` ${SELECTED_CAMPUS}` },
+    { name: "non-object weights", valueScoreWeights: [] },
+    {
+      name: "missing weight",
+      valueScoreWeights: { affordability: 35, commute: 25, safety: 25 },
+    },
+    {
+      name: "unknown weight",
+      valueScoreWeights: { ...VALUE_SCORE_WEIGHTS, rent: 40 },
+    },
+    {
+      name: "non-numeric weight",
+      valueScoreWeights: { ...VALUE_SCORE_WEIGHTS, commute: "25" },
+    },
+    {
+      name: "all-zero weights",
+      valueScoreWeights: {
+        affordability: 0,
+        commute: 0,
+        safety: 0,
+        amenities: 0,
+      },
+    },
+  ];
+
+  for (const testCase of cases) {
+    await t.test(testCase.name, async () => {
+      const { name: _name, ...requestOverrides } = testCase;
+      const service = createServiceStub(async () => {
+        assert.fail("Service must not receive invalid comparison context.");
+      });
+      const auth = createAuthStub({
+        implementation: () => {
+          assert.fail("Authentication must not run for invalid context.");
+        },
+      });
+
+      await withServer(createTestApp({ service, auth }), async (baseUrl) => {
+        const result = await postComparison(baseUrl, {
+          listingIds: [LISTING_ID_ONE, LISTING_ID_TWO],
+          ...requestOverrides,
+        });
+
+        assertErrorResponse(result, 400, "INVALID_COMPARISON_CONTEXT");
         assert.equal(auth.calls.length, 0);
         assert.equal(service.calls.length, 0);
       });
@@ -380,7 +509,12 @@ test("service userId comes only from authentication and ignores query parameters
     );
 
     assert.equal(result.response.status, 200);
-    assert.deepEqual(Object.keys(service.calls[0]), ["listingIds", "userId"]);
+    assert.deepEqual(Object.keys(service.calls[0]), [
+      "listingIds",
+      "campus",
+      "valueScoreWeights",
+      "userId",
+    ]);
     assert.equal(service.calls[0].userId, USER_ID);
     assert.notEqual(service.calls[0].userId, "bbbbbbbbbbbbbbbbbbbbbbbb");
   });

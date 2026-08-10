@@ -46,6 +46,10 @@ import {
   mapAiFiltersToSearchState,
   parseSearchFromQuery,
 } from "./utils/searchState";
+import {
+  buildComparePath,
+  resolveComparisonCampus,
+} from "./utils/comparisonContext";
 
 const MAX_COMPARE_LISTINGS = 3;
 const MONGO_ID_PATTERN = /^[a-f0-9]{24}$/i;
@@ -176,6 +180,11 @@ function App() {
   const [isLoadingSharedCollection, setIsLoadingSharedCollection] =
     useState(false);
   const [sharedCollectionError, setSharedCollectionError] = useState("");
+  const comparisonCampus = resolveComparisonCampus({
+    routeCampus: searchParams.get("campus"),
+    hasRouteCampus: searchParams.has("campus"),
+    activeCampus: activeSearch?.campus,
+  });
 
   const getCurrentRouteOrigin = () => {
     if (location.pathname === "/saved") {
@@ -1505,6 +1514,11 @@ function App() {
       type: "success",
       message: "Added to comparison.",
     });
+
+    if (location.pathname === "/compare") {
+      navigate(buildComparePath(nextIds, comparisonCampus), { replace: true });
+    }
+
     return true;
   };
 
@@ -1524,14 +1538,14 @@ function App() {
     });
 
     if (location.pathname === "/compare") {
-      navigate(`/compare?ids=${nextIds.join(",")}`, { replace: true });
+      navigate(buildComparePath(nextIds, comparisonCampus), { replace: true });
     }
   };
 
   const openCompareView = () => {
     setCompareOrigin(getCurrentRouteOrigin());
     setListingDetailOrigin("results");
-    navigate(`/compare?ids=${compareListingIdsRef.current.join(",")}`);
+    navigate(buildComparePath(compareListingIdsRef.current, comparisonCampus));
   };
 
   const openCompareWithListing = (listingId) => {
@@ -1547,7 +1561,7 @@ function App() {
 
     setCompareOrigin(getCurrentRouteOrigin());
     setListingDetailOrigin("results");
-    navigate(`/compare?ids=${compareListingIdsRef.current.join(",")}`);
+    navigate(buildComparePath(compareListingIdsRef.current, comparisonCampus));
   };
 
   const openListingDetail = (listingId, originOverride = "") => {
@@ -1556,8 +1570,8 @@ function App() {
     }
 
     setListingDetailOrigin(originOverride || getCurrentRouteOrigin());
-    const campusQuery = activeSearch?.campus
-      ? `?campus=${encodeURIComponent(activeSearch.campus)}`
+    const campusQuery = comparisonCampus || searchParams.has("campus")
+      ? `?campus=${encodeURIComponent(comparisonCampus)}`
       : "";
     navigate(`/listings/${listingId}${campusQuery}`);
   };
@@ -1603,7 +1617,10 @@ function App() {
           ? `/shared/collections/${selectedShareToken}`
           : "/";
       case "compare":
-        return `/compare?ids=${compareListingIdsRef.current.join(",")}`;
+        return buildComparePath(
+          compareListingIdsRef.current,
+          comparisonCampus,
+        );
       case "results":
       default:
         return activeSearch ? buildResultsPath(activeSearch) : "/";
@@ -1751,7 +1768,7 @@ function App() {
         const listing = await apiRequest(
           `/api/listings/${listingId}`,
           {},
-          { campus: searchParams.get("campus") || activeSearch?.campus },
+          { campus: comparisonCampus || undefined },
         );
         if (restoredListingKeyRef.current === restoreKey) {
           setSelectedListing(listing);
@@ -1778,34 +1795,35 @@ function App() {
       return;
     }
 
+    const restoreKey = location.pathname + location.search;
     const queryIds = parseCompareIdsFromQuery(searchParams);
-    if (sameIdSequence(queryIds, compareListingIdsRef.current)) {
+    if (
+      restoredCompareKeyRef.current === restoreKey &&
+      sameIdSequence(queryIds, compareListingIdsRef.current)
+    ) {
       return;
     }
-
-    const restoreKey = location.pathname + location.search;
     restoredCompareKeyRef.current = restoreKey;
 
     // No isMounted flag: see the /results restoration effect above for why
     // — StrictMode's dev-only remount would discard a still-resolving fetch.
     const loadInitialCompareListings = async () => {
-      compareListingIdsRef.current = queryIds;
-      setCompareListingIds(queryIds);
+      if (!sameIdSequence(queryIds, compareListingIdsRef.current)) {
+        compareListingIdsRef.current = queryIds;
+        setCompareListingIds(queryIds);
+      }
 
-      const knownIds = new Set(
-        [...listings, ...savedListings, ...directlyFetchedListings]
-          .map((listing) => getListingId(listing))
-          .filter(Boolean),
-      );
-      const missingIds = queryIds.filter((id) => !knownIds.has(id));
-
-      if (missingIds.length === 0) {
+      if (queryIds.length === 0) {
         return;
       }
 
       const fetched = await Promise.all(
-        missingIds.map((id) =>
-          apiRequest(`/api/listings/${id}`, {}, {}).catch(() => null),
+        queryIds.map((id) =>
+          apiRequest(
+            `/api/listings/${id}`,
+            {},
+            { campus: comparisonCampus || undefined },
+          ).catch(() => null),
         ),
       );
 
@@ -1998,8 +2016,7 @@ function App() {
       : location.pathname === "/compare"
         ? "compare"
         : "search";
-  const detailCampusLabel =
-    searchParams.get("campus") || activeSearch?.campus || "";
+  const detailCampusLabel = comparisonCampus;
   const selectedCampus = findCampusByLabel(campuses, activeSearch?.campus);
   const detailSelectedCampus = findCampusByLabel(
     campuses,
@@ -2147,7 +2164,7 @@ function App() {
                 listings={comparedListings}
                 listingIds={compareListingIds}
                 availableListings={comparisonAvailableListings}
-                campus={activeSearch?.campus}
+                campus={comparisonCampus}
                 compareStatus={compareStatus}
                 maxCompareListings={MAX_COMPARE_LISTINGS}
                 valueScoreWeights={valueScoreWeights}

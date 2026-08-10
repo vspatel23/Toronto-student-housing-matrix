@@ -156,36 +156,45 @@ Authorization: Bearer <token>
 Content-Type: application/json
 ```
 
-The body must contain only `listingIds`, with exactly two or three unique,
-valid MongoDB listing IDs:
+The body must contain exactly `listingIds`, `campus`, and
+`valueScoreWeights`. `listingIds` must contain two or three unique, valid
+MongoDB listing IDs. `campus` is the current comparison campus or `null`, and
+the four non-negative weights are normalized again by the server:
 
 ```json
 {
   "listingIds": [
     "64b000000000000000000001",
     "64b000000000000000000002"
-  ]
+  ],
+  "campus": "Seneca Polytechnic -- Newnham",
+  "valueScoreWeights": {
+    "affordability": 35,
+    "commute": 25,
+    "safety": 25,
+    "amenities": 15
+  }
 }
 ```
 
 The endpoint is authenticated so it can safely load the caller's newest saved
-preference when one exists. A client cannot provide a user ID. An authenticated
-user without a saved preference can still request a recommendation using the
-listing data alone.
+preference when one exists for explanatory context. A client cannot provide a
+user ID, listing facts, calculated scores, breakdowns, or winners. The supplied
+campus and weights are the authoritative current comparison context and are
+validated before authentication or database work.
 
 The server retrieves authoritative records from MongoDB and rejects missing or
 inactive listings. OpenRouter receives only these sanitized listing fields:
 `id`, `title`, `address`, `monthlyRent`, `propertyType`, `furnished`, the
 applicable stored commute estimate, stored safety values, `amenities`, and the
-existing application-calculated `valueScore`, `valueScoreBreakdown`, and an
-optional `preferenceWeightedValueScore`. The latter maps the saved legacy
-`rent` weight to the existing affordability component and normalizes the saved
-weights application-side; it does not replace or mutate Value Score. OpenRouter
-also receives the fixed Value Score weights. When available, the separate
-sanitized saved-preference fields are `campus`, `minRent`, `maxRent`, `maxBudget`,
-`housingType`, `maxCommute`, `safetyLevel`, `minimumSafetyLevel`, `amenities`,
-and saved `weights`. Notes, account data, IDs, tokens, email, password data,
-favorites, comparison history, and unrelated listing metadata are excluded.
+application-calculated `valueScore` and `valueScoreBreakdown`. The backend
+recalculates those scores from MongoDB listing data with the supplied campus
+and normalized weights, so the deterministic AI winner uses the same score
+shown by Compare Listings. When available, separate sanitized saved-preference
+fields such as budget, housing type, commute, safety, and amenities remain
+explanatory context only. Saved legacy score weights, notes, account data, IDs,
+tokens, email, password data, favorites, comparison history, and unrelated
+listing metadata are excluded.
 
 A successful response uses this stable contract:
 
@@ -195,7 +204,7 @@ A successful response uses this stable contract:
   "recommendation": {
     "bestOverall": {
       "listingId": "64b000000000000000000002",
-      "reason": "This listing has the highest existing Value Score at 82/100 among the compared listings."
+      "reason": "This listing has the highest application-calculated Value Score at 82/100 among the compared listings."
     },
     "bestBudget": {
       "listingId": "64b000000000000000000001",
@@ -217,11 +226,11 @@ A successful response uses this stable contract:
       },
       {
         "listingId": "64b000000000000000000002",
-        "advantage": "It has the highest existing Value Score at 82/100 among the compared listings.",
+        "advantage": "It has the highest application-calculated Value Score at 82/100 among the compared listings.",
         "compromise": "It is stored as unfurnished in the listing data."
       }
     ],
-    "recommendation": "Choose listing 64b000000000000000000002, which has the highest existing Value Score at 82/100. Important tradeoff: It is stored as unfurnished in the listing data."
+    "recommendation": "Choose listing 64b000000000000000000002, which has the highest application-calculated Value Score at 82/100. Important tradeoff: It is stored as unfurnished in the listing data."
   }
 }
 ```

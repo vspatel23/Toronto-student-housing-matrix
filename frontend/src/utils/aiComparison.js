@@ -1,4 +1,6 @@
 import { apiRequest } from "./api";
+import { normalizeComparisonCampus } from "./comparisonContext";
+import { normalizeValueScoreWeights } from "./listingFormatters";
 
 const OBJECT_ID_PATTERN = /^[0-9a-f]{24}$/i;
 const OBJECT_ID_TOKEN_PATTERN = /[0-9a-f]{24}/gi;
@@ -24,6 +26,7 @@ const selectionErrorCodes = new Set([
   "INVALID_COMPARISON_COUNT",
   "INVALID_LISTING_ID",
   "DUPLICATE_LISTING_IDS",
+  "INVALID_COMPARISON_CONTEXT",
   "LISTING_NOT_FOUND",
   "LISTING_INACTIVE",
 ]);
@@ -97,6 +100,14 @@ const validateRequestListingIds = (listingIds) => {
 
   return normalizedIds;
 };
+
+export const normalizeAiComparisonContext = ({
+  campus,
+  valueScoreWeights,
+} = {}) => ({
+  campus: normalizeComparisonCampus(campus) || null,
+  valueScoreWeights: normalizeValueScoreWeights(valueScoreWeights),
+});
 
 const isNonEmptyString = (value) =>
   typeof value === "string" && value.trim().length > 0;
@@ -195,9 +206,13 @@ export const validateAiComparisonRecommendation = (
 
 export const requestAiComparisonRecommendation = async (
   listingIds,
-  { authToken, signal } = {},
+  { authToken, signal, campus, valueScoreWeights } = {},
 ) => {
   validateRequestListingIds(listingIds);
+  const comparisonContext = normalizeAiComparisonContext({
+    campus,
+    valueScoreWeights,
+  });
 
   const normalizedAuthToken =
     typeof authToken === "string" ? authToken.trim() : "";
@@ -216,7 +231,10 @@ export const requestAiComparisonRecommendation = async (
       "Content-Type": "application/json",
       Authorization: `Bearer ${normalizedAuthToken}`,
     },
-    body: JSON.stringify({ listingIds: [...listingIds] }),
+    body: JSON.stringify({
+      listingIds: [...listingIds],
+      ...comparisonContext,
+    }),
     ...(signal ? { signal } : {}),
   });
 
@@ -231,6 +249,14 @@ export const getAiComparisonErrorPresentation = (error) => {
   if (error?.status === 401 || error?.code === "AI_AUTH_REQUIRED") {
     return {
       message: errorMessages.AI_AUTH_REQUIRED,
+      retryable: false,
+    };
+  }
+
+  if (error?.code === "INVALID_COMPARISON_CONTEXT") {
+    return {
+      message:
+        "The current campus or Value Score weights cannot be used for this AI comparison.",
       retryable: false,
     };
   }

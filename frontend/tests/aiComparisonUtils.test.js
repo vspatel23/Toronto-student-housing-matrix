@@ -11,6 +11,13 @@ const LISTING_ID_TWO = "64b000000000000000000002";
 const LISTING_ID_THREE = "64b000000000000000000003";
 const UNKNOWN_LISTING_ID = "64b000000000000000000099";
 const CANONICAL_LISTING_ID_ONE = LISTING_ID_ONE.toLowerCase();
+const CAMPUS = "Toronto Metropolitan University";
+const DEFAULT_VALUE_SCORE_WEIGHTS = {
+  affordability: 35,
+  commute: 25,
+  safety: 25,
+  amenities: 15,
+};
 
 const createRecommendation = (listingIds = [
   CANONICAL_LISTING_ID_ONE,
@@ -74,7 +81,7 @@ test.after(async () => {
   await vite?.close();
 });
 
-test("posts only the exact ordered listing IDs with existing bearer auth and signal", async () => {
+test("posts ordered listing IDs with the trimmed campus and normalized score weights", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];
   const controller = new AbortController();
@@ -95,6 +102,14 @@ test("posts only the exact ordered listing IDs with existing bearer auth and sig
       await aiComparison.requestAiComparisonRecommendation(listingIds, {
         authToken: "  existing-token  ",
         signal: controller.signal,
+        campus: `  ${CAMPUS}  `,
+        valueScoreWeights: {
+          affordability: 70,
+          commute: 50,
+          safety: 50,
+          amenities: 30,
+          ignored: 999,
+        },
       }),
       recommendation,
     );
@@ -106,9 +121,54 @@ test("posts only the exact ordered listing IDs with existing bearer auth and sig
         "Content-Type": "application/json",
         Authorization: "Bearer existing-token",
       },
-      body: JSON.stringify({ listingIds }),
+      body: JSON.stringify({
+        listingIds,
+        campus: CAMPUS,
+        valueScoreWeights: DEFAULT_VALUE_SCORE_WEIGHTS,
+      }),
       signal: controller.signal,
     });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("always supplies an explicit deterministic context without client-calculated scores", async () => {
+  const originalFetch = globalThis.fetch;
+  const calls = [];
+  const listingIds = [LISTING_ID_ONE, LISTING_ID_TWO];
+  const recommendation = createRecommendation();
+
+  globalThis.fetch = async (...args) => {
+    calls.push(args);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => JSON.stringify({ success: true, recommendation }),
+    };
+  };
+
+  try {
+    await aiComparison.requestAiComparisonRecommendation(listingIds, {
+      authToken: "existing-token",
+      campus: "   ",
+      valueScoreWeights: {
+        affordability: 0,
+        commute: 0,
+        safety: 0,
+        amenities: 0,
+      },
+    });
+
+    const body = JSON.parse(calls[0][1].body);
+    assert.deepEqual(body, {
+      listingIds,
+      campus: null,
+      valueScoreWeights: DEFAULT_VALUE_SCORE_WEIGHTS,
+    });
+    assert.equal("valueScore" in body, false);
+    assert.equal("valueScoreBreakdown" in body, false);
+    assert.equal("estimatedMonthlyCost" in body, false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -303,6 +363,12 @@ test("maps backend and local failures to concise safe retry behavior", () => {
       error: { code: "AI_OUTPUT_INVALID" },
       message: "We couldn't generate a reliable recommendation. Please try again.",
       retryable: true,
+    },
+    {
+      error: { code: "INVALID_COMPARISON_CONTEXT" },
+      message:
+        "The current campus or Value Score weights cannot be used for this AI comparison.",
+      retryable: false,
     },
   ];
 

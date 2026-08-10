@@ -15,10 +15,7 @@ const formatNumber = (value) =>
 
 const unique = (values) => [...new Set(values)];
 
-const getOverallScore = (listing) =>
-  isFiniteNumber(listing.preferenceWeightedValueScore)
-    ? listing.preferenceWeightedValueScore
-    : listing.valueScore;
+const getOverallScore = (listing) => listing.valueScore;
 
 const getSafetyComparisonValue = (listing) =>
   getAvailableSafetyScore({ safety: listing.safety });
@@ -51,10 +48,7 @@ const buildCategoryReasons = (listingsById, categoryCandidates) => {
       "bestOverall",
       (listing, tied) => {
         const score = getOverallScore(listing);
-        const scoreName = isFiniteNumber(listing.preferenceWeightedValueScore)
-          ? "application-calculated preference-weighted comparison score"
-          : "existing Value Score";
-        return `This listing ${tied ? "is tied for" : "has"} the highest ${scoreName} at ${formatNumber(score)}/100 among the compared listings.`;
+        return `This listing ${tied ? "is tied for" : "has"} the highest application-calculated Value Score at ${formatNumber(score)}/100 among the compared listings.`;
       },
       "The supplied data does not establish an overall score result.",
     ),
@@ -239,11 +233,7 @@ const buildRecommendationOptions = (
 
   const listing = listingsById.get(selectedId);
   const score = getOverallScore(listing);
-  const scoreDescription = isFiniteNumber(
-    listing.preferenceWeightedValueScore,
-  )
-    ? "application-calculated preference-weighted comparison score"
-    : "existing Value Score";
+  const scoreDescription = "application-calculated Value Score";
   const tieDescription = categoryCandidates.bestOverall.length > 1
     ? `is tied for the highest ${scoreDescription}`
     : `has the highest ${scoreDescription}`;

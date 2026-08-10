@@ -1,5 +1,6 @@
 const COMPARISON_ERROR_CODES = Object.freeze({
   INVALID_COMPARISON_COUNT: "INVALID_COMPARISON_COUNT",
+  INVALID_COMPARISON_CONTEXT: "INVALID_COMPARISON_CONTEXT",
   INVALID_LISTING_ID: "INVALID_LISTING_ID",
   DUPLICATE_LISTING_IDS: "DUPLICATE_LISTING_IDS",
   LISTING_NOT_FOUND: "LISTING_NOT_FOUND",
@@ -67,6 +68,12 @@ const createDuplicateListingIdsError = () =>
     COMPARISON_ERROR_CODES.DUPLICATE_LISTING_IDS,
   );
 
+const createInvalidComparisonContextError = () =>
+  new ComparisonRequestValidationError(
+    "Campus and Value Score weights must be valid current comparison context.",
+    COMPARISON_ERROR_CODES.INVALID_COMPARISON_CONTEXT,
+  );
+
 const createListingNotFoundError = () =>
   new ComparisonListingNotFoundError();
 
@@ -85,6 +92,7 @@ module.exports = {
   ComparisonServiceUnavailableError,
   createComparisonServiceUnavailableError,
   createDuplicateListingIdsError,
+  createInvalidComparisonContextError,
   createInvalidComparisonCountError,
   createInvalidListingIdError,
   createListingInactiveError,

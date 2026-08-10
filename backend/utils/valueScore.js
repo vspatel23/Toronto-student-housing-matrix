@@ -15,6 +15,51 @@ const VALUE_SCORE_WEIGHTS = Object.freeze({
   amenities: 15,
 });
 
+const VALUE_SCORE_WEIGHT_KEYS = Object.freeze([
+  "affordability",
+  "commute",
+  "safety",
+  "amenities",
+]);
+const NORMALIZED_WEIGHT_TOTAL = 100;
+const NORMALIZED_WEIGHT_EPSILON = 1e-10;
+const VALUE_SCORE_PRECISION = 1e12;
+
+const normalizeValueScoreWeights = (weights) => {
+  const source =
+    weights && typeof weights === "object" && !Array.isArray(weights)
+      ? weights
+      : VALUE_SCORE_WEIGHTS;
+  const safeWeights = Object.fromEntries(
+    VALUE_SCORE_WEIGHT_KEYS.map((key) => {
+      const weight = Number(source[key]);
+      return [key, Number.isFinite(weight) && weight >= 0 ? weight : 0];
+    }),
+  );
+  const totalWeight = VALUE_SCORE_WEIGHT_KEYS.reduce(
+    (total, key) => total + safeWeights[key],
+    0,
+  );
+
+  if (!Number.isFinite(totalWeight) || totalWeight <= 0) {
+    return { ...VALUE_SCORE_WEIGHTS };
+  }
+
+  if (
+    Math.abs(totalWeight - NORMALIZED_WEIGHT_TOTAL) <=
+    NORMALIZED_WEIGHT_EPSILON
+  ) {
+    return { ...safeWeights };
+  }
+
+  return Object.fromEntries(
+    VALUE_SCORE_WEIGHT_KEYS.map((key) => [
+      key,
+      (safeWeights[key] / totalWeight) * NORMALIZED_WEIGHT_TOTAL,
+    ]),
+  );
+};
+
 const hasValue = (value) =>
   value !== undefined && value !== null && String(value).trim() !== "";
 
@@ -185,28 +230,36 @@ const calculateValueScoreBreakdown = (listing, campus) => ({
   amenities: getAmenitiesScore(listing),
 });
 
+const calculateWeightedValueScoreFromBreakdown = (breakdown, weights) => {
+  const normalizedWeights = normalizeValueScoreWeights(weights);
+  const overall = VALUE_SCORE_WEIGHT_KEYS.reduce(
+    (score, key) =>
+      score + clampScore(breakdown?.[key]) * (normalizedWeights[key] / 100),
+    0,
+  );
+  const stableOverall =
+    Math.round(overall * VALUE_SCORE_PRECISION) / VALUE_SCORE_PRECISION;
+
+  return clampScore(stableOverall);
+};
+
 const calculateValueScore = (listing, campus) => {
   const breakdown = calculateValueScoreBreakdown(listing, campus);
-
-  // Value Score formula:
-  // Affordability 35% + Commute 25% + Safety 25% + Amenities 15%.
-  // The weights reflect the project goal: students usually care most about rent,
-  // but commute and safety are also major decision factors.
-  const overall =
-    breakdown.affordability * (VALUE_SCORE_WEIGHTS.affordability / 100) +
-    breakdown.commute * (VALUE_SCORE_WEIGHTS.commute / 100) +
-    breakdown.safety * (VALUE_SCORE_WEIGHTS.safety / 100) +
-    breakdown.amenities * (VALUE_SCORE_WEIGHTS.amenities / 100);
-
-  return clampScore(overall);
+  return calculateWeightedValueScoreFromBreakdown(
+    breakdown,
+    VALUE_SCORE_WEIGHTS,
+  );
 };
 
 module.exports = {
   VALUE_SCORE_WEIGHTS,
+  VALUE_SCORE_WEIGHT_KEYS,
   calculateValueScore,
   calculateValueScoreBreakdown,
+  calculateWeightedValueScoreFromBreakdown,
   getAvailableSafetyScore,
   getCommuteEstimate,
   getCommuteMinutes,
   getRentNumber,
+  normalizeValueScoreWeights,
 };

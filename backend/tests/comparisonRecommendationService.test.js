@@ -11,8 +11,10 @@ const {
 } = require("../services/comparisonErrors");
 const {
   LISTING_COMPARISON_PROJECTION,
+  MAX_COMPARISON_CAMPUS_LENGTH,
   PREFERENCE_COMPARISON_PROJECTION,
   createComparisonRecommendationService,
+  normalizeComparisonContext,
   normalizeComparisonListingIds,
 } = require("../services/comparisonRecommendationService");
 const {
@@ -130,9 +132,6 @@ const createValidRecommendation = (context) => {
 };
 
 const createScoreImplementations = (scoresById) => ({
-  calculateValueScoreImpl(listing) {
-    return scoresById[listing._id.toString()];
-  },
   calculateValueScoreBreakdownImpl(listing) {
     const score = scoresById[listing._id.toString()];
     return {
@@ -181,6 +180,91 @@ test("listing IDs are canonicalized and case-insensitive duplicates are rejected
       return true;
     },
   );
+});
+
+test("current comparison context is strictly validated and weights are normalized", () => {
+  assert.deepEqual(
+    normalizeComparisonContext(SELECTED_CAMPUS, {
+      affordability: 7,
+      commute: 5,
+      safety: 5,
+      amenities: 3,
+    }),
+    {
+      campus: SELECTED_CAMPUS,
+      valueScoreWeights: VALUE_SCORE_WEIGHTS,
+    },
+  );
+
+  const invalidContexts = [
+    ["", VALUE_SCORE_WEIGHTS],
+    [` ${SELECTED_CAMPUS}`, VALUE_SCORE_WEIGHTS],
+    ["x".repeat(MAX_COMPARISON_CAMPUS_LENGTH + 1), VALUE_SCORE_WEIGHTS],
+    [SELECTED_CAMPUS, null],
+    [SELECTED_CAMPUS, []],
+    [SELECTED_CAMPUS, { ...VALUE_SCORE_WEIGHTS, extra: 1 }],
+    [
+      SELECTED_CAMPUS,
+      { affordability: 35, commute: 25, safety: 25 },
+    ],
+    [
+      SELECTED_CAMPUS,
+      { ...VALUE_SCORE_WEIGHTS, affordability: "35" },
+    ],
+    [
+      SELECTED_CAMPUS,
+      { ...VALUE_SCORE_WEIGHTS, affordability: -1 },
+    ],
+    [
+      SELECTED_CAMPUS,
+      { affordability: 0, commute: 0, safety: 0, amenities: 0 },
+    ],
+  ];
+
+  invalidContexts.forEach(([campus, weights]) => {
+    assert.throws(
+      () => normalizeComparisonContext(campus, weights),
+      (error) => {
+        assert.equal(
+          error.code,
+          COMPARISON_ERROR_CODES.INVALID_COMPARISON_CONTEXT,
+        );
+        assert.equal(error.statusCode, 400);
+        return true;
+      },
+    );
+  });
+});
+
+test("partial direct-service comparison context is rejected before database access", async (t) => {
+  const cases = [
+    { campus: SELECTED_CAMPUS },
+    { valueScoreWeights: VALUE_SCORE_WEIGHTS },
+  ];
+
+  for (const comparisonContext of cases) {
+    await t.test(JSON.stringify(comparisonContext), async () => {
+      const listingModel = createListingModel();
+      const service = createComparisonRecommendationService({
+        HousingListingModel: listingModel,
+        generateComparisonRecommendation: async () => {
+          assert.fail("Provider must not run for invalid context.");
+        },
+      });
+
+      await assertComparisonError(
+        service.recommendComparison({
+          listingIds: [LISTING_A_ID, LISTING_B_ID],
+          ...comparisonContext,
+        }),
+        {
+          code: COMPARISON_ERROR_CODES.INVALID_COMPARISON_CONTEXT,
+          statusCode: 400,
+        },
+      );
+      assert.equal(listingModel.calls.length, 0);
+    });
+  }
 });
 
 test("invalid counts are rejected before database or provider access", async (t) => {
@@ -422,11 +506,19 @@ test("three listings preserve deterministic ties and exact sanitized context", a
 
   await service.recommendComparison({
     listingIds: [LISTING_A_ID, LISTING_B_ID, LISTING_C_ID],
+    campus: SELECTED_CAMPUS,
+    valueScoreWeights: {
+      affordability: 7,
+      commute: 5,
+      safety: 5,
+      amenities: 3,
+    },
     userId: USER_ID,
   });
 
   assert.deepEqual(Object.keys(observedContext), [
     "listings",
+    "campus",
     "preferences",
     "valueScoreWeights",
     "categoryCandidates",
@@ -446,9 +538,9 @@ test("three listings preserve deterministic ties and exact sanitized context", a
       "amenities",
       "valueScore",
       "valueScoreBreakdown",
-      "preferenceWeightedValueScore",
     ]);
   });
+  assert.equal(observedContext.campus, SELECTED_CAMPUS);
   assert.equal(observedContext.listings[0].title, injection);
   assert.deepEqual(observedContext.preferences, {
     campus: SELECTED_CAMPUS,
@@ -460,7 +552,6 @@ test("three listings preserve deterministic ties and exact sanitized context", a
     safetyLevel: "High Only",
     minimumSafetyLevel: "Medium",
     amenities: ["WiFi", "Laundry"],
-    weights: { rent: 41, commute: 29, safety: 20, amenities: 10 },
   });
   assert.deepEqual(observedContext.valueScoreWeights, VALUE_SCORE_WEIGHTS);
   assert.deepEqual(observedContext.categoryCandidates, {
@@ -486,7 +577,7 @@ test("three listings preserve deterministic ties and exact sanitized context", a
   assert.equal(serializedContext.includes("secretWeight"), false);
 });
 
-test("saved weights explicitly adjust bestOverall without replacing Value Score", async () => {
+test("supplied current weights override legacy saved weights for bestOverall", async () => {
   const listingModel = createListingModel({
     documents: [
       createListing(LISTING_A_ID),
@@ -503,9 +594,169 @@ test("saved weights explicitly adjust bestOverall without replacing Value Score"
   const service = createComparisonRecommendationService({
     HousingListingModel: listingModel,
     SavedPreferenceModel: preferenceModel,
-    calculateValueScoreImpl(listing) {
-      return listing._id === LISTING_A_ID ? 70 : 90;
+    calculateValueScoreBreakdownImpl(listing) {
+      return listing._id === LISTING_A_ID
+        ? { affordability: 100, commute: 20, safety: 20, amenities: 20 }
+        : { affordability: 20, commute: 100, safety: 100, amenities: 100 };
     },
+    generateComparisonRecommendation: async (context) => {
+      observedContext = clone(context);
+      return createValidRecommendation(context);
+    },
+  });
+
+  await service.recommendComparison({
+    listingIds: [LISTING_A_ID, LISTING_B_ID],
+    campus: SELECTED_CAMPUS,
+    valueScoreWeights: {
+      affordability: 0,
+      commute: 100,
+      safety: 0,
+      amenities: 0,
+    },
+    userId: USER_ID,
+  });
+
+  assert.deepEqual(
+    observedContext.listings.map((listing) => ({
+      id: listing.id,
+      valueScore: listing.valueScore,
+    })),
+    [
+      {
+        id: LISTING_A_ID,
+        valueScore: 20,
+      },
+      {
+        id: LISTING_B_ID,
+        valueScore: 100,
+      },
+    ],
+  );
+  assert.deepEqual(observedContext.categoryCandidates.bestOverall, [
+    LISTING_B_ID,
+  ]);
+  assert.match(
+    observedContext.approvedGrounding.categoryReasons.bestOverall,
+    /application-calculated Value Score/i,
+  );
+  assert.equal(JSON.stringify(observedContext).includes('"rent":100'), false);
+});
+
+test("Seneca regression uses the displayed 73 score instead of the legacy-weighted 75", async () => {
+  let observedContext;
+  const service = createComparisonRecommendationService({
+    HousingListingModel: createListingModel({
+      documents: [
+        createListing(LISTING_A_ID),
+        createListing(LISTING_B_ID),
+      ],
+    }),
+    SavedPreferenceModel: createPreferenceModel({
+      document: {
+        campus: "A stale saved campus",
+        weights: { rent: 40, commute: 30, safety: 20, amenities: 10 },
+      },
+    }),
+    calculateValueScoreBreakdownImpl(listing, campus) {
+      assert.equal(campus, "Seneca Polytechnic -- Newnham");
+      return listing._id === LISTING_A_ID
+        ? { affordability: 100, commute: 53, safety: 63, amenities: 63 }
+        : { affordability: 68, commute: 68, safety: 68, amenities: 68 };
+    },
+    generateComparisonRecommendation: async (context) => {
+      observedContext = clone(context);
+      return createValidRecommendation(context);
+    },
+  });
+
+  await service.recommendComparison({
+    listingIds: [LISTING_A_ID, LISTING_B_ID],
+    campus: "Seneca Polytechnic -- Newnham",
+    valueScoreWeights: VALUE_SCORE_WEIGHTS,
+    userId: USER_ID,
+  });
+
+  assert.deepEqual(
+    observedContext.listings.map(({ id, valueScore }) => ({ id, valueScore })),
+    [
+      { id: LISTING_A_ID, valueScore: 73 },
+      { id: LISTING_B_ID, valueScore: 68 },
+    ],
+  );
+  assert.deepEqual(observedContext.categoryCandidates.bestOverall, [
+    LISTING_A_ID,
+  ]);
+  assert.match(
+    observedContext.approvedGrounding.categoryReasons.bestOverall,
+    /73\/100/,
+  );
+  assert.doesNotMatch(
+    observedContext.approvedGrounding.categoryReasons.bestOverall,
+    /75\/100/,
+  );
+});
+
+test("explicit null campus does not fall back to a saved campus", async () => {
+  const listingA = createListing(LISTING_A_ID, {
+    commuteEstimates: [
+      { campus: "York University", minutes: 30, isEstimated: true },
+      { campus: SELECTED_CAMPUS, minutes: 10, isEstimated: true },
+    ],
+  });
+  const listingB = createListing(LISTING_B_ID, {
+    commuteEstimates: [
+      { campus: "York University", minutes: 20, isEstimated: true },
+      { campus: SELECTED_CAMPUS, minutes: 40, isEstimated: true },
+    ],
+  });
+  let observedContext;
+  const service = createComparisonRecommendationService({
+    HousingListingModel: createListingModel({
+      documents: [listingA, listingB],
+    }),
+    SavedPreferenceModel: createPreferenceModel({
+      document: {
+        campus: SELECTED_CAMPUS,
+        weights: { rent: 100, commute: 0, safety: 0, amenities: 0 },
+      },
+    }),
+    generateComparisonRecommendation: async (context) => {
+      observedContext = clone(context);
+      return createValidRecommendation(context);
+    },
+  });
+
+  await service.recommendComparison({
+    listingIds: [LISTING_A_ID, LISTING_B_ID],
+    campus: null,
+    valueScoreWeights: VALUE_SCORE_WEIGHTS,
+    userId: USER_ID,
+  });
+
+  assert.equal(observedContext.campus, null);
+  assert.equal(observedContext.preferences.campus, null);
+  assert.equal(observedContext.listings[0].commute.campus, "York University");
+  assert.deepEqual(observedContext.categoryCandidates.bestCommute, [
+    LISTING_B_ID,
+  ]);
+});
+
+test("legacy direct callers use canonical weights instead of saved legacy defaults", async () => {
+  let observedContext;
+  const service = createComparisonRecommendationService({
+    HousingListingModel: createListingModel({
+      documents: [
+        createListing(LISTING_A_ID),
+        createListing(LISTING_B_ID),
+      ],
+    }),
+    SavedPreferenceModel: createPreferenceModel({
+      document: {
+        campus: SELECTED_CAMPUS,
+        weights: { rent: 100, commute: 0, safety: 0, amenities: 0 },
+      },
+    }),
     calculateValueScoreBreakdownImpl(listing) {
       return listing._id === LISTING_A_ID
         ? { affordability: 100, commute: 20, safety: 20, amenities: 20 }
@@ -522,32 +773,17 @@ test("saved weights explicitly adjust bestOverall without replacing Value Score"
     userId: USER_ID,
   });
 
+  assert.deepEqual(observedContext.valueScoreWeights, VALUE_SCORE_WEIGHTS);
   assert.deepEqual(
-    observedContext.listings.map((listing) => ({
-      id: listing.id,
-      valueScore: listing.valueScore,
-      preferenceWeightedValueScore: listing.preferenceWeightedValueScore,
-    })),
+    observedContext.listings.map(({ id, valueScore }) => ({ id, valueScore })),
     [
-      {
-        id: LISTING_A_ID,
-        valueScore: 70,
-        preferenceWeightedValueScore: 100,
-      },
-      {
-        id: LISTING_B_ID,
-        valueScore: 90,
-        preferenceWeightedValueScore: 20,
-      },
+      { id: LISTING_A_ID, valueScore: 48 },
+      { id: LISTING_B_ID, valueScore: 72 },
     ],
   );
   assert.deepEqual(observedContext.categoryCandidates.bestOverall, [
-    LISTING_A_ID,
+    LISTING_B_ID,
   ]);
-  assert.match(
-    observedContext.approvedGrounding.categoryReasons.bestOverall,
-    /preference-weighted comparison score/i,
-  );
 });
 
 test("ties use the first submitted ID as the stable category selection", async () => {
