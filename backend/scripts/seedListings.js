@@ -582,6 +582,8 @@ const baseListings = [
     isActive: true,
   },
   {
+    // Intentionally omit address, coordinates, and commute estimates for this
+    // one active fixture so the UI demonstrates its graceful unavailable state.
     seedId: "listing-021",
     title: "Affordable Scarborough Basement",
     neighborhood: "Scarborough",
@@ -597,10 +599,6 @@ const baseListings = [
       crimeRatePer1000: 34.8,
       dataSource: "Sample development estimate",
     },
-    commuteEstimates: [
-      { campus: "University of Toronto — Scarborough", minutes: 28, isEstimated: true },
-      { campus: "Seneca Polytechnic", minutes: 52, isEstimated: true },
-    ],
     nearestTransit: { name: "Ellesmere Bus", walkMinutes: 9 },
     amenities: ["Kitchen", "Laundry", "Utilities Included"],
     source: "Sample development data",
@@ -660,13 +658,18 @@ const baseListings = [
   {
     seedId: "listing-024",
     title: "Etobicoke Shared House Room",
+    // Use the verified Mabelle/Islington landmark as an approximate
+    // neighbourhood point, not as a claim about an exact rental property.
+    address: "Mabelle Avenue near Islington Station, Toronto, ON",
     neighborhood: "Etobicoke",
+    postalCode: "M9A 0C9",
     description: "Furnished room in a shared west-end home for students who prefer a quieter area.",
     monthlyRent: 895,
     propertyType: "Shared House",
     bedrooms: 5,
     bathrooms: 2,
     furnished: true,
+    location: { lat: 43.6463, lng: -79.5254 },
     safety: {
       safetyScore: 71,
       crimeRateLevel: "Medium",

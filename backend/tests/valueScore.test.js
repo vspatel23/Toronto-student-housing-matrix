@@ -151,20 +151,34 @@ test("the existing campus matching behavior is reused for comparison context", (
   assert.equal(getCommuteMinutes(listing, "York University"), null);
 });
 
-test("the existing rule-based handling of explicit null values remains unchanged", () => {
+test("explicit null commute minutes remain unavailable to Value Score", () => {
   const missingDataListing = {
     monthlyRent: 1_500,
-    commuteEstimates: [{ campus: "Test Campus", minutes: null }],
+    commuteEstimates: [
+      { campus: "Toronto Metropolitan University", minutes: null },
+    ],
     safety: { safetyScore: null },
     amenities: [],
   };
 
-  assert.equal(getCommuteMinutes(missingDataListing), 0);
+  assert.equal(
+    getCommuteMinutes(
+      missingDataListing,
+      "Toronto Metropolitan University",
+    ),
+    null,
+  );
   assert.equal(getAvailableSafetyScore(missingDataListing), null);
-  assert.deepEqual(calculateValueScoreBreakdown(missingDataListing), {
-    affordability: 80,
-    commute: 100,
-    safety: 0,
-    amenities: 0,
-  });
+  assert.deepEqual(
+    calculateValueScoreBreakdown(
+      missingDataListing,
+      "Toronto Metropolitan University",
+    ),
+    {
+      affordability: 80,
+      commute: 50,
+      safety: 0,
+      amenities: 0,
+    },
+  );
 });

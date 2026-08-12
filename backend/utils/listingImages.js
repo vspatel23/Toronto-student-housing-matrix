@@ -1,3 +1,7 @@
+const {
+  enrichListingCommuteEstimates,
+} = require("./commute");
+
 const FALLBACK_IMAGE = Object.freeze({
   src: "/images/listings/fallback/property-placeholder.svg",
   alt: "Property image unavailable",
@@ -273,10 +277,10 @@ const serializeListingImages = (listing) => {
     ...existingFields
   } = listingObject;
 
-  return {
+  return enrichListingCommuteEstimates({
     ...existingFields,
     ...normalizeListingImages(rawImages),
-  };
+  });
 };
 
 module.exports = {

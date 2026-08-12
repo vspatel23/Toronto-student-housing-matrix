@@ -29,7 +29,7 @@ test("validates the established location.lat and location.lng shape", () => {
   assert.equal(isValidCoordinatePair([90, 180]), true);
 });
 
-test("rejects absent, non-numeric, boolean, non-finite, and out-of-range coordinates", () => {
+test("rejects absent, zero, non-numeric, boolean, non-finite, and out-of-range coordinates", () => {
   [
     null,
     {},
@@ -37,6 +37,8 @@ test("rejects absent, non-numeric, boolean, non-finite, and out-of-range coordin
     { location: { lat: "", lng: -79 } },
     { location: { lat: false, lng: -79 } },
     { location: { lat: Number.NaN, lng: -79 } },
+    { location: { lat: 0, lng: -79 } },
+    { location: { lat: 43, lng: 0 } },
     { location: { lat: 91, lng: -79 } },
     { location: { lat: 43, lng: -181 } },
   ].forEach((value) => assert.equal(getValidCoordinates(value), null));

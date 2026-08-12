@@ -16,6 +16,10 @@ const {
   FALLBACK_IMAGE,
   LISTING_FIELDS,
 } = require("../utils/listingImages");
+const {
+  SUPPORTED_CAMPUS_LABELS,
+  getCommuteMinutes,
+} = require("../utils/commute");
 
 const LISTING_ID = "64b000000000000000000001";
 const SECOND_LISTING_ID = "64b000000000000000000002";
@@ -189,6 +193,18 @@ const assertValidImageContract = (listing) => {
   assert.equal(listing.primaryImage.isFallback, false);
 };
 
+const assertNormalizedCommuteContract = (listing) => {
+  assert.equal(listing.commuteEstimates.length, SUPPORTED_CAMPUS_LABELS.length);
+  assert.equal(
+    getCommuteMinutes(listing, "University of Toronto -- St. George"),
+    12,
+  );
+
+  SUPPORTED_CAMPUS_LABELS.forEach((campus) => {
+    assert.equal(Number.isFinite(getCommuteMinutes(listing, campus)), true);
+  });
+};
+
 test("browse listings includes the image projection and normalized image contract", async () => {
   let observedFilter;
   let observedProjection;
@@ -223,6 +239,7 @@ test("browse listings includes the image projection and normalized image contrac
         "number",
       );
       assertValidImageContract(body.listings[0]);
+      assertNormalizedCommuteContract(body.listings[0]);
     });
   } finally {
     restoreAll(restores);
@@ -273,6 +290,7 @@ test("listing detail normalizes malformed legacy data to a safe fallback while p
       assert.deepEqual(body.primaryImage, FALLBACK_IMAGE);
       assert.equal(JSON.stringify(body).includes("/Users/"), false);
       assert.equal(JSON.stringify(body).includes("javascript:"), false);
+      assertNormalizedCommuteContract(body);
     });
   } finally {
     restoreAll(restores);
@@ -326,6 +344,7 @@ test("saved listings populate images and return the same normalized contract", a
       assert.equal(body.listings[0].savedAt, savedAt.toISOString());
       assert.equal(body.listings[0].title, "Route Contract Test Listing");
       assertValidImageContract(body.listings[0]);
+      assertNormalizedCommuteContract(body.listings[0]);
     });
   } finally {
     restoreAll(restores);
@@ -380,6 +399,7 @@ test("private collection detail populates images and returns the normalized cont
       assert.equal(body.collection.name, "Private Test Collection");
       assert.equal(body.listings.length, 1);
       assertValidImageContract(body.listings[0]);
+      assertNormalizedCommuteContract(body.listings[0]);
     });
   } finally {
     restoreAll(restores);
@@ -435,6 +455,7 @@ test("public shared collection populates images without authentication or privat
       assert.equal(body.listings[0]._id, SECOND_LISTING_ID);
       assert.equal(body.listings[0].title, "Shared Route Listing");
       assertValidImageContract(body.listings[0]);
+      assertNormalizedCommuteContract(body.listings[0]);
     });
   } finally {
     restoreAll(restores);

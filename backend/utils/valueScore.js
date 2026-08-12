@@ -1,3 +1,8 @@
+const {
+  getCommuteEstimate,
+  getCommuteMinutes,
+} = require("./commute");
+
 const clampScore = (score) => {
   const numericScore = Number(score);
 
@@ -63,64 +68,9 @@ const normalizeValueScoreWeights = (weights) => {
 const hasValue = (value) =>
   value !== undefined && value !== null && String(value).trim() !== "";
 
-const normalizeCampusName = (value) =>
-  hasValue(value)
-    ? String(value)
-        .replace(/--/g, "-")
-        .replace(/[—–]/g, "-")
-        .replace(/\s+/g, " ")
-        .trim()
-        .toLowerCase()
-    : "";
-
-const isMatchingCampusName = (estimateCampus, selectedCampus) => {
-  const normalizedEstimateCampus = normalizeCampusName(estimateCampus);
-  const normalizedSelectedCampus = normalizeCampusName(selectedCampus);
-
-  if (!normalizedEstimateCampus || !normalizedSelectedCampus) {
-    return false;
-  }
-
-  return (
-    normalizedEstimateCampus === normalizedSelectedCampus ||
-    normalizedSelectedCampus.startsWith(`${normalizedEstimateCampus} -`) ||
-    normalizedEstimateCampus.startsWith(`${normalizedSelectedCampus} -`)
-  );
-};
-
 const getRentNumber = (listing) => {
   const rent = Number(listing?.monthlyRent ?? listing?.rent);
   return Number.isFinite(rent) && rent >= 0 ? rent : null;
-};
-
-const getCommuteEstimate = (listing, campus) => {
-  if (!Array.isArray(listing?.commuteEstimates)) {
-    return null;
-  }
-
-  const normalizedCampus = normalizeCampusName(campus);
-  let commuteEstimate;
-
-  if (normalizedCampus) {
-    commuteEstimate = listing.commuteEstimates.find(
-      (estimate) => isMatchingCampusName(estimate?.campus, campus),
-    );
-
-    if (!commuteEstimate) {
-      return null;
-    }
-  } else {
-    commuteEstimate = listing.commuteEstimates[0];
-  }
-
-  return commuteEstimate || null;
-};
-
-const getCommuteMinutes = (listing, campus) => {
-  const commuteEstimate = getCommuteEstimate(listing, campus);
-
-  const minutes = Number(commuteEstimate?.minutes);
-  return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
 };
 
 const getAvailableSafetyScore = (listing) => {

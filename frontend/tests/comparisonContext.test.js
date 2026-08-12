@@ -106,11 +106,11 @@ test("the selected campus recomputes stale saved and direct listing score data",
 
   assert.deepEqual(listingFormatters.getValueScoreBreakdown(staleListing, ""), {
     affordability: 100,
-    commute: 72,
+    commute: 50,
     safety: 63,
     amenities: 63,
   });
-  assert.equal(listingFormatters.getValueScore(staleListing, ""), 78);
+  assert.equal(listingFormatters.getValueScore(staleListing, ""), 73);
 });
 
 test("fractional comparison weights stay stable at the shared rounding boundary", () => {

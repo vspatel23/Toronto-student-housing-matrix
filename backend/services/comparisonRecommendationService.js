@@ -34,6 +34,7 @@ const openRouterService = require("./openRouterService");
 
 const LISTING_COMPARISON_PROJECTION =
   "_id title address monthlyRent propertyType furnished " +
+  "location.lat location.lng " +
   "safety.safetyScore safety.crimeRateLevel " +
   "commuteEstimates.campus commuteEstimates.minutes " +
   "commuteEstimates.isEstimated amenities isActive";
