@@ -1,4 +1,5 @@
 import { NEARBY_PLACE_CATEGORY_IDS } from "../utils/nearbyPlaceCategories.js";
+import { CITYWIDE_NEARBY_PLACES } from "./citywideNearbyPlaces.js";
 
 const {
   TRANSIT,
@@ -14,7 +15,7 @@ const {
 // Fixed Toronto points keep the demo deterministic without fabricating a
 // location relative to each listing. Place records are a bundled snapshot of
 // OpenStreetMap data; campus records reuse the project's campus seed data.
-export const SEEDED_NEARBY_PLACES = Object.freeze(
+const DOWNTOWN_NEARBY_PLACES = Object.freeze(
   [
     {
       id: "osm-node-26240972",
@@ -114,3 +115,13 @@ export const SEEDED_NEARBY_PLACES = Object.freeze(
     },
   ].map((place) => Object.freeze(place)),
 );
+
+const placesById = new Map();
+
+[...DOWNTOWN_NEARBY_PLACES, ...CITYWIDE_NEARBY_PLACES].forEach((place) => {
+  if (!placesById.has(place.id)) {
+    placesById.set(place.id, place);
+  }
+});
+
+export const SEEDED_NEARBY_PLACES = Object.freeze([...placesById.values()]);
