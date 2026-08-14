@@ -932,6 +932,72 @@ test("Nearby Student Essentials renders normalized details and supports filterin
   assert.equal(sortControl.value, "farthest");
 });
 
+test("switching listings replaces nearby results and ignores a stale earlier load", async () => {
+  const firstLoad = createDeferred();
+  const secondListing = createListing({
+    _id: "64b000000000000000000069",
+    title: "North York Listing",
+    address: "12 Poyntz Avenue, Toronto, ON",
+    location: { lat: 43.7612, lng: -79.4118 },
+  });
+  const createLabelledPlaces = (prefix) =>
+    createNearbyPlaces().map((place, index) => ({
+      ...place,
+      id: `${prefix.toLowerCase()}-${place.id}`,
+      name: `${prefix} Place ${index + 1}`,
+    }));
+  const firstPlaces = createLabelledPlaces("First");
+  const secondPlaces = createLabelledPlaces("Second");
+  const loadCalls = [];
+  const loadNearbyPlaces = (requestedListing) => {
+    loadCalls.push(requestedListing._id);
+    return requestedListing._id === LISTING_ID
+      ? firstLoad.promise
+      : Promise.resolve(secondPlaces);
+  };
+  const view = render(
+    React.createElement(ListingLocationExperience, {
+      listing: createListing(),
+      campus: CAMPUS_LABEL,
+      selectedCampus: createCampus(),
+      loadNearbyPlaces,
+    }),
+  );
+
+  await waitFor(() => {
+    assert.deepEqual(loadCalls, [LISTING_ID]);
+  });
+
+  view.rerender(
+    React.createElement(ListingLocationExperience, {
+      listing: secondListing,
+      campus: CAMPUS_LABEL,
+      selectedCampus: createCampus(),
+      loadNearbyPlaces,
+    }),
+  );
+
+  const nearbyList = await screen.findByRole("list", {
+    name: "Nearby student essentials",
+  });
+  await within(nearbyList).findByRole("button", { name: /Second Place 1/ });
+  assert.deepEqual(loadCalls, [LISTING_ID, secondListing._id]);
+  assert.equal(screen.queryByText(/First Place/), null);
+  assert.ok(screen.getByTitle(`Housing listing: ${secondListing.title}`));
+
+  await act(async () => {
+    firstLoad.resolve(firstPlaces);
+    await firstLoad.promise;
+  });
+
+  await waitFor(() => {
+    assert.ok(
+      within(nearbyList).getByRole("button", { name: /Second Place 1/ }),
+    );
+    assert.equal(screen.queryByText(/First Place/), null);
+  });
+});
+
 test("nearby list and map selections stay synchronized without changing listing-campus bounds", async () => {
   const places = createNearbyPlaces();
   const scrolledPlaceIds = [];

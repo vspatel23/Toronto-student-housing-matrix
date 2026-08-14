@@ -584,13 +584,16 @@ const baseListings = [
   {
     seedId: "listing-021",
     title: "Affordable Scarborough Basement",
+    address: "32 Munham Gate, Toronto, ON",
     neighborhood: "Scarborough",
+    postalCode: "M1P 2N9",
     description: "Budget basement unit in a quiet residential pocket with shared laundry.",
     monthlyRent: 1025,
     propertyType: "Basement",
     bedrooms: 1,
     bathrooms: 1,
     furnished: false,
+    location: { lat: 43.7597385, lng: -79.2774456 },
     safety: {
       safetyScore: 66,
       crimeRateLevel: "Medium",
@@ -660,13 +663,16 @@ const baseListings = [
   {
     seedId: "listing-024",
     title: "Etobicoke Shared House Room",
+    address: "31 Burnhamthorpe Park Boulevard, Toronto, ON",
     neighborhood: "Etobicoke",
+    postalCode: "M9A 5B8",
     description: "Furnished room in a shared west-end home for students who prefer a quieter area.",
     monthlyRent: 895,
     propertyType: "Shared House",
     bedrooms: 5,
     bathrooms: 2,
     furnished: true,
+    location: { lat: 43.6517125, lng: -79.5360115 },
     safety: {
       safetyScore: 71,
       crimeRateLevel: "Medium",
