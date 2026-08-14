@@ -1,16 +1,31 @@
-# React + Vite
+# Toronto Student Housing Matrix Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+This directory contains the React/Vite browser application for Toronto Student Housing Matrix.
 
-Currently, two official plugins are available:
+Start with the repository's main documentation:
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- [Project README](../README.md)
+- [Technical Documentation](../docs/TECHNICAL_DOCUMENTATION.md)
+- [Project Closure Artifacts](../docs/PROJECT_CLOSURE.md)
 
-## React Compiler
+## Local development
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+Node.js 24.x is the version used by CI.
 
-## Expanding the ESLint configuration
+```bash
+npm install
+cp .env.example .env
+npm run dev
+```
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+`VITE_API_URL` must point to the Express backend. `VITE_MAPTILER_KEY` is optional; maps fall back to OpenStreetMap when it is blank.
+
+## Verification
+
+```bash
+npm test
+npm run lint
+npm run build
+```
+
+For complete backend setup, MongoDB seeding, environment variables, public deployment, and demo-account instructions, use the root [README](../README.md#local-installation).

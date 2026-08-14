@@ -582,9 +582,11 @@ const baseListings = [
     isActive: true,
   },
   {
+    // Use a representative residential point for deterministic nearby-place
+    // coverage, not as a claim about an exact rental property.
     seedId: "listing-021",
     title: "Affordable Scarborough Basement",
-    address: "32 Munham Gate, Toronto, ON",
+    address: "Munham Gate near Ellesmere Road, Toronto, ON",
     neighborhood: "Scarborough",
     postalCode: "M1P 2N9",
     description: "Budget basement unit in a quiet residential pocket with shared laundry.",
@@ -600,10 +602,6 @@ const baseListings = [
       crimeRatePer1000: 34.8,
       dataSource: "Sample development estimate",
     },
-    commuteEstimates: [
-      { campus: "University of Toronto — Scarborough", minutes: 28, isEstimated: true },
-      { campus: "Seneca Polytechnic", minutes: 52, isEstimated: true },
-    ],
     nearestTransit: { name: "Ellesmere Bus", walkMinutes: 9 },
     amenities: ["Kitchen", "Laundry", "Utilities Included"],
     source: "Sample development data",
@@ -663,16 +661,18 @@ const baseListings = [
   {
     seedId: "listing-024",
     title: "Etobicoke Shared House Room",
-    address: "31 Burnhamthorpe Park Boulevard, Toronto, ON",
+    // Use the verified Mabelle/Islington landmark as an approximate
+    // neighbourhood point, not as a claim about an exact rental property.
+    address: "Mabelle Avenue near Islington Station, Toronto, ON",
     neighborhood: "Etobicoke",
-    postalCode: "M9A 5B8",
+    postalCode: "M9A 0C9",
     description: "Furnished room in a shared west-end home for students who prefer a quieter area.",
     monthlyRent: 895,
     propertyType: "Shared House",
     bedrooms: 5,
     bathrooms: 2,
     furnished: true,
-    location: { lat: 43.6517125, lng: -79.5360115 },
+    location: { lat: 43.6463, lng: -79.5254 },
     safety: {
       safetyScore: 71,
       crimeRateLevel: "Medium",

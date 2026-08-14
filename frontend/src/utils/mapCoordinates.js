@@ -21,6 +21,8 @@ export const isValidCoordinatePair = (coordinates) => {
   return (
     Number.isFinite(lat) &&
     Number.isFinite(lng) &&
+    lat !== 0 &&
+    lng !== 0 &&
     lat >= -90 &&
     lat <= 90 &&
     lng >= -180 &&

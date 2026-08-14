@@ -1,296 +1,158 @@
 # Toronto Student Housing Matrix
 
-PRJ666 Team 04 - Toronto Student Housing Matrix
+PRJ666 Team 04 — Final Project
 
-## Description
+Toronto Student Housing Matrix is a decision-support web application for students comparing rental options near Toronto-area campuses. It combines rent, campus commute estimates, neighbourhood safety indicators, amenities, furnishing, and an adjustable Value Score in one searchable interface.
 
-Toronto Student Housing Matrix is a university project that helps students compare housing options near Toronto campuses. The application includes a React frontend for preference entry and housing comparison, and an Express API backed by MongoDB/Mongoose for listings, campuses, and saved preferences.
+## Public System
 
-## Tech Stack
+| Service | URL |
+| --- | --- |
+| Web application | <https://torontostudenthousingmatrix.vercel.app> |
+| Backend API | <https://toronto-student-housing-backend.vercel.app> |
+| API health check | <https://toronto-student-housing-backend.vercel.app/api/health> |
 
-- Frontend: React + Vite
-- Backend: Node.js + Express + MongoDB/Mongoose
-- CI/CD: GitHub Actions
+The frontend and backend are separate Vercel projects connected to MongoDB Atlas. The URLs above were verified during project closure.
 
-## Folder Structure
+## Project Artifacts
+
+All required PRJ666 closure artifacts are available in this repository:
+
+| Required artifact | Location |
+| --- | --- |
+| Project source code | [`frontend/`](frontend/) and [`backend/`](backend/) |
+| Technical documentation | [`docs/TECHNICAL_DOCUMENTATION.md`](docs/TECHNICAL_DOCUMENTATION.md) |
+| Installation and verification instructions | [Local Installation](#local-installation) |
+| PRJ566 deviations and enhancements | [`docs/PROJECT_CLOSURE.md`](docs/PROJECT_CLOSURE.md#deviations-and-enhancements-from-prj566-proposal) |
+| Public deployment instructions | [`docs/PROJECT_CLOSURE.md`](docs/PROJECT_CLOSURE.md#public-deployment--running-the-system) |
+| Demo account instructions | [Demo / Test Account](#demo--test-account) |
+| Listing-image specification | [`docs/listing-images.md`](docs/listing-images.md) |
+| Commute demonstration scenarios | [`docs/sprint-3-commute-validation-scenarios.md`](docs/sprint-3-commute-validation-scenarios.md) |
+
+## Implemented Functionality
+
+- Account registration and login with bcrypt password hashing and JWT authentication.
+- Campus, rent, housing type, safety, furnishing, amenity, and maximum-commute search criteria.
+- AI-powered natural-language search that converts a housing description into validated filters through the backend OpenRouter integration.
+- Listing cards, ranked results, result refinement, adjustable Value Score priorities, and recommendation badges.
+- Listing details with ordered image galleries, safe image fallbacks, amenities, safety context, commute information, and score breakdowns.
+- Interactive React Leaflet maps using OpenStreetMap data, optional MapTiler tiles, straight-line campus distance, and external Google Maps transit-direction links.
+- Manual searches persist the authenticated user's current preference in the backend. The visible account tools include recent searches, saved listings/favourites, named collections, and public read-only collection sharing.
+- Side-by-side comparison for up to three listings, monthly-cost comparison, and an authenticated AI comparison explanation.
+- Monthly housing-cost calculator and deterministic nearby student essentials on listing details.
+- Shareable URLs for searches, listings, comparisons, and shared collections.
+
+Commute values are deterministic planning estimates rather than live TTC predictions. A valid stored estimate for the selected campus remains authoritative; otherwise, the backend can derive an estimate from validated listing and campus coordinates using straight-line distance plus a documented transit-planning heuristic. The system does not call a live TTC or routing API. Nearby-place data is also a bundled demo snapshot rather than a live business directory. Listing images are generated course-project imagery and are not verified photographs of the named properties.
+
+## Architecture
+
+```text
+React + Vite frontend
+        |
+        | HTTPS / JSON
+        v
+Node.js + Express API
+        |
+        | Mongoose
+        v
+MongoDB Atlas
+
+Natural-language search:
+Frontend -> Express AI endpoint -> OpenRouter -> validated housing filters
+```
+
+The backend is the only component that receives the MongoDB URI, JWT secret, or OpenRouter key. Vite variables are embedded in the browser bundle and must never contain private server secrets. See [Technical Documentation](docs/TECHNICAL_DOCUMENTATION.md) for component, data-flow, endpoint, and security details.
+
+## Repository Structure
 
 ```text
 .
-|-- backend/              # Express API, Mongoose models, routes, scripts
-|-- frontend/             # Vite + React application
-|-- .github/workflows/    # GitHub Actions workflows
-|-- .gitignore
-`-- README.md
+|-- .github/workflows/       # GitHub Actions validation
+|-- backend/
+|   |-- config/              # MongoDB and OpenRouter configuration
+|   |-- constants/           # Supported filters and AI limits
+|   |-- data/                # Default campus data
+|   |-- middleware/          # JWT authentication
+|   |-- models/              # Mongoose data models
+|   |-- prompts/             # Grounded OpenRouter prompts
+|   |-- routes/              # Express API endpoints
+|   |-- scripts/             # Validation, index, and listing seed scripts
+|   |-- services/            # AI orchestration and safe errors
+|   |-- tests/               # Backend automated tests
+|   |-- utils/               # Commute, scoring, image, filter, and comparison helpers
+|   |-- render.yaml          # Optional Render backend blueprint
+|   |-- server.js            # Express application entry point
+|   `-- vercel.json          # Backend Vercel routing
+|-- docs/                    # Technical and project-closure documents
+|-- frontend/
+|   |-- public/images/       # Listing assets and fallback image
+|   |-- scripts/             # Image optimization utility
+|   |-- src/components/      # Search, results, details, maps, saved, and compare UI
+|   |-- src/data/            # Bundled nearby-place demo data
+|   |-- src/styles/          # Feature-specific styles
+|   |-- src/utils/           # API, map, scoring, image, and search helpers
+|   |-- tests/               # Frontend unit and DOM tests
+|   `-- vercel.json          # SPA build and route rewrites
+`-- README.md                # Project entry point
 ```
 
-## Local Setup
+## Local Installation
 
-### Backend
+### Prerequisites
+
+- Git.
+- Node.js 24.x and npm. Node 24.x is the version used by the repository's GitHub Actions workflow.
+- A MongoDB deployment. MongoDB Atlas is used for the public system; a reachable local MongoDB server can also be used for development.
+- An OpenRouter account and API key to exercise AI search and AI comparison. The rest of the application can run without OpenRouter, but AI requests will return a controlled unavailable response.
+
+### 1. Clone the repository
+
+```bash
+git clone https://github.com/vspatel23/Toronto-student-housing-matrix.git
+cd Toronto-student-housing-matrix
+```
+
+### 2. Configure and run the backend
 
 ```bash
 cd backend
 npm install
 cp .env.example .env
-npm start
 ```
 
-Before starting the backend, replace the placeholder MongoDB URI in `backend/.env` with a real local or hosted MongoDB connection string.
+Edit `backend/.env` and replace placeholders. At minimum, set:
 
-### OpenRouter AI setup
-
-The shared AI infrastructure uses OpenRouter from the backend only. Issue #59
-does not add a public AI search endpoint or frontend AI integration.
-
-1. Create an OpenRouter API key at <https://openrouter.ai/keys>.
-2. Add the key and a model slug to your local `backend/.env`:
-
-   ```dotenv
-   OPENROUTER_API_KEY=your_real_key_here
-   OPENROUTER_MODEL=openai/gpt-4o-mini
-   ```
-
-3. Install and validate the backend configuration, then start the server:
-
-   ```bash
-   cd backend
-   npm install
-   npm run check:ai
-   npm start
-   ```
-
-`npm run check:ai` validates the local configuration without making a paid AI
-request or printing the API key; it does not authenticate against OpenRouter.
-When `OPENROUTER_MODEL` is omitted, the
-backend defaults to `openai/gpt-4o-mini`, a relatively inexpensive model that
-supports structured JSON output. After the server starts, confirm existing
-backend operation at <http://localhost:5000/api/health> (or the `PORT` value in
-your environment).
-
-The reusable housing-filter validator rejects unknown top-level fields and
-invalid supported values. OpenRouter output is parsed as JSON and must pass
-this application-side validator before an API route can use it.
-
-Never commit `backend/.env`. Keep the OpenRouter key out of frontend variables,
-Vite source code, logs, tests, and API responses.
-
-### Natural-language housing search API
-
-Issue #60 exposes the Issue #59 AI infrastructure through:
-
-```http
-POST /api/ai/search
-Content-Type: application/json
+```dotenv
+PORT=5000
+MONGO_URI=mongodb+srv://<username>:<password>@<cluster-host>/<database-name>
+JWT_SECRET=<long-random-secret>
+OPENROUTER_API_KEY=<openrouter-api-key>
+OPENROUTER_MODEL=openai/gpt-4o-mini
+FRONTEND_URL=http://localhost:5173
 ```
 
-The JSON body must contain only a string `description`:
+`MONGODB_URI` is accepted as an alternative to `MONGO_URI`. Do not commit `backend/.env`.
 
-```json
-{
-  "description": "I want a furnished apartment near Toronto Metropolitan University between $1200 and $1800, within 30 minutes, with WiFi and Laundry."
-}
+Validate the bundled listing data and then seed the configured database:
+
+```bash
+npm run seed:listings -- --validate-only
+npm run seed:listings
 ```
 
-Leading and trailing whitespace is removed. The trimmed description must not be
-empty or exceed 1,500 characters. A successful response contains only the
-normalized Issue #59 housing-filter representation:
+The seed script upserts the sample listings. When the campuses collection is empty, the campus API inserts the bundled default campuses on its first request.
 
-```json
-{
-  "success": true,
-  "filters": {
-    "campus": "Toronto Metropolitan University",
-    "minRent": 1200,
-    "maxRent": 1800,
-    "housingType": "Apartment",
-    "maxCommute": 30,
-    "safetyLevel": null,
-    "furnished": "Furnished",
-    "amenities": ["WiFi", "Laundry"]
-  }
-}
+Start the development server:
+
+```bash
+npm run dev
 ```
 
-Errors use one safe envelope:
+For a production-style local start, use `npm start`. With the example port, the health check is <http://localhost:5000/api/health>.
 
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_DESCRIPTION",
-    "message": "Housing description is required."
-  }
-}
-```
+### 3. Configure and run the frontend
 
-| HTTP status | Error code | Common safe message |
-| --- | --- | --- |
-| `400` | `INVALID_DESCRIPTION` | `Housing description is required.` |
-| `400` | `DESCRIPTION_TOO_LONG` | `Housing description must not exceed 1500 characters.` |
-| `502` | `AI_OUTPUT_INVALID` | `AI service returned an invalid response.` |
-| `503` | `AI_NOT_CONFIGURED` | `AI service is not configured.` |
-| `503` | `AI_CONFIGURATION_INVALID` | `AI service configuration is invalid.` |
-| `503` | `AI_SERVICE_UNAVAILABLE` | `AI service is temporarily unavailable.` |
-| `504` | `AI_SERVICE_TIMEOUT` | `AI service request timed out.` |
-
-Malformed JSON also uses `INVALID_DESCRIPTION`; parser-size failures use
-`DESCRIPTION_TOO_LONG`. Both return the same JSON error envelope without a
-stack trace.
-
-The endpoint uses the backend-only OpenRouter configuration, prompt, error
-types, and strict application-side filter validator established by Issue #59.
-Unsupported criteria are omitted; a description with no supported criteria can
-produce all `null` scalar filters and an empty `amenities` array. Invalid or
-invented provider fields reject the provider output and are never returned.
-This endpoint only translates text into filters. It does not query, create,
-modify, recommend, or invent housing listings. Existing manual searches remain
-on `GET /api/listings`; the frontend's established search mapping converts
-`housingType` to that endpoint's `propertyType` query parameter.
-
-### AI comparison recommendation API
-
-Issue #63 adds a backend-only AI explanation layer for an existing comparison:
-
-```http
-POST /api/ai/compare
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-The body must contain exactly `listingIds`, `campus`, and
-`valueScoreWeights`. `listingIds` must contain two or three unique, valid
-MongoDB listing IDs. `campus` is the current comparison campus or `null`, and
-the four non-negative weights are normalized again by the server:
-
-```json
-{
-  "listingIds": [
-    "64b000000000000000000001",
-    "64b000000000000000000002"
-  ],
-  "campus": "Seneca Polytechnic -- Newnham",
-  "valueScoreWeights": {
-    "affordability": 35,
-    "commute": 25,
-    "safety": 25,
-    "amenities": 15
-  }
-}
-```
-
-The endpoint is authenticated so it can safely load the caller's newest saved
-preference when one exists for explanatory context. A client cannot provide a
-user ID, listing facts, calculated scores, breakdowns, or winners. The supplied
-campus and weights are the authoritative current comparison context and are
-validated before authentication or database work.
-
-The server retrieves authoritative records from MongoDB and rejects missing or
-inactive listings. OpenRouter receives only these sanitized listing fields:
-`id`, `title`, `address`, `monthlyRent`, `propertyType`, `furnished`, the
-applicable stored commute estimate, stored safety values, `amenities`, and the
-application-calculated `valueScore` and `valueScoreBreakdown`. The backend
-recalculates those scores from MongoDB listing data with the supplied campus
-and normalized weights, so the deterministic AI winner uses the same score
-shown by Compare Listings. When available, separate sanitized saved-preference
-fields such as budget, housing type, commute, safety, and amenities remain
-explanatory context only. Saved legacy score weights, notes, account data, IDs,
-tokens, email, password data, favorites, comparison history, and unrelated
-listing metadata are excluded.
-
-A successful response uses this stable contract:
-
-```json
-{
-  "success": true,
-  "recommendation": {
-    "bestOverall": {
-      "listingId": "64b000000000000000000002",
-      "reason": "This listing has the highest application-calculated Value Score at 82/100 among the compared listings."
-    },
-    "bestBudget": {
-      "listingId": "64b000000000000000000001",
-      "reason": "This listing has the lowest supplied monthly rent at $1300 per month."
-    },
-    "bestCommute": {
-      "listingId": "64b000000000000000000002",
-      "reason": "This listing has the shortest supplied commute at 15 minutes for the applicable campus context."
-    },
-    "bestSafety": {
-      "listingId": null,
-      "reason": "The supplied listings do not include comparable safety data."
-    },
-    "listingInsights": [
-      {
-        "listingId": "64b000000000000000000001",
-        "advantage": "It has the lowest supplied monthly rent at $1300 per month.",
-        "compromise": "Its supplied commute is 10 minutes longer than the shortest compared commute."
-      },
-      {
-        "listingId": "64b000000000000000000002",
-        "advantage": "It has the highest application-calculated Value Score at 82/100 among the compared listings.",
-        "compromise": "It is stored as unfurnished in the listing data."
-      }
-    ],
-    "recommendation": "Choose listing 64b000000000000000000002, which has the highest application-calculated Value Score at 82/100. Important tradeoff: It is stored as unfurnished in the listing data."
-  }
-}
-```
-
-Budget, commute, safety, and overall IDs are checked against deterministic
-application winners after the provider response. Equal metrics produce a
-deterministic candidate set; the first submitted tied ID is the stable response
-reference, and its application-rendered reason states the tie. When all compared listings lack usable
-commute or safety data, that category's `listingId` is `null`. Neutral
-missing-data fallbacks used inside Value Score are never presented as observed
-facts.
-
-Provider output must satisfy both OpenRouter's strict JSON Schema and a separate
-application validator. The application first renders an allow-list of factual
-category reasons, per-listing advantages/compromises, and final recommendation
-sentences from stored/calculated data. The model selects exact strings from
-that allow-list; invented or paraphrased prose is rejected. Unknown fields or
-listing IDs, missing sections, duplicate or missing insights,
-deterministic-winner contradictions, unapproved claims, and empty or oversized
-text are returned as `AI_OUTPUT_INVALID`. Listing/user text is marked as
-untrusted data in the prompt and cannot override the grounding rules.
-
-Comparison request and lookup errors use the same safe error envelope as other
-AI endpoints:
-
-```json
-{
-  "success": false,
-  "error": {
-    "code": "INVALID_COMPARISON_COUNT",
-    "message": "Exactly 2 or 3 listing IDs are required."
-  }
-}
-```
-
-| HTTP status | Error code | Meaning |
-| --- | --- | --- |
-| `400` | `INVALID_COMPARISON_REQUEST` | The JSON body is malformed or contains fields other than `listingIds`. |
-| `400` | `INVALID_COMPARISON_COUNT` | The request does not contain exactly two or three IDs. |
-| `400` | `INVALID_LISTING_ID` | At least one ID is not a valid MongoDB ObjectId. |
-| `400` | `DUPLICATE_LISTING_IDS` | The same listing was supplied more than once. |
-| `404` | `LISTING_NOT_FOUND` | At least one authoritative listing does not exist. |
-| `409` | `LISTING_INACTIVE` | At least one selected listing is inactive. |
-| `502` | `AI_OUTPUT_INVALID` | Provider output failed parsing, schema, grounding-ID, or winner validation. |
-| `503` | `AI_NOT_CONFIGURED` | The backend OpenRouter key is missing. |
-| `503` | `AI_CONFIGURATION_INVALID` | The configured OpenRouter key/model is invalid. |
-| `503` | `AI_SERVICE_UNAVAILABLE` | OpenRouter is temporarily unavailable or rate limited. |
-| `504` | `AI_SERVICE_TIMEOUT` | The provider request exceeded the configured timeout. |
-| `500` | `COMPARISON_SERVICE_UNAVAILABLE` | An unexpected internal comparison lookup/orchestration failure was safely hidden. |
-
-Authentication failures preserve the existing authentication middleware
-contract: HTTP `401` with `{ "message": "Invalid or expired token." }`.
-
-This endpoint reuses the backend-only Issue #59 OpenRouter configuration and
-does not create, update, or delete listings. It is an optional enhancement:
-the public rule-based comparison page, numeric comparison values, Value Score,
-manual listing APIs, and deterministic recommendation badges do not call or
-depend on OpenRouter.
-
-### Frontend
+Open another terminal from the repository root:
 
 ```bash
 cd frontend
@@ -299,90 +161,102 @@ cp .env.example .env
 npm run dev
 ```
 
-The frontend reads `VITE_API_URL` to connect to the backend API. For local development, the example value points to `http://localhost:5000`.
-
-### Interactive Maps and Directions
-
-Browse Results and individual Listing Details use React Leaflet with OpenStreetMap data to visualize listings and the selected campus. Listing Details labels its calculated geographic distance as straight-line distance; it is not route distance. Its Open Directions action opens a standard external Google Maps transit-directions URL and does not load the Google Maps JavaScript API or require a Google API key.
+The example configuration points `VITE_API_URL` to `http://localhost:5000`. Vite normally serves the frontend at <http://localhost:5173>.
 
 ### Nearby Student Essentials
 
-Listing Details uses deterministic bundled demo data to show public transit,
-grocery stores, pharmacies, libraries, parks, gyms, clinics, and
-campus-related locations within a 2.5 km straight-line radius. The fixed
-Toronto place records are a bundled OpenStreetMap snapshot spanning the
-neighbourhoods represented by every active demo listing, with campus locations
-also aligned to the project's campus seed data. The UI credits
-[OpenStreetMap contributors](https://www.openstreetmap.org/copyright), whose
-data is available under the Open Database License. The frontend normalizes
-every supported place to a stable ID, name, category, numeric distance,
-optional address, and optional coordinates. Distances reuse the listing-map
-Haversine calculation and must not be interpreted as walking or driving
-routes. The list initially shows six places, can be filtered by category,
-sorted by distance, and expanded without duplicating results.
-
-The nearby-place seed is immutable application data loaded asynchronously so
-the UI can isolate loading, empty, and retryable error states from the rest of
-Listing Details. It is a fixed demo snapshot rather than a live business
-directory. Every active demo listing has valid coordinates and bundled nearby
-coverage; a future listing outside the snapshot or without valid coordinates
-can still use the controlled empty or unavailable state. No external place
-provider is queried at runtime, and no paid request, backend cache, service
-credential, or additional environment variable is used; runtime caching and
-provider rate-limit handling therefore do not apply to this implementation.
+Listing Details uses a deterministic bundled OpenStreetMap snapshot to show
+transit, groceries, pharmacies, libraries, parks, gyms, and clinics within a
+2.5 km straight-line radius. The snapshot covers every active demo listing;
+it is not a live business directory or routing service. The UI credits
+[OpenStreetMap contributors](https://www.openstreetmap.org/copyright), and
+distances use the same Haversine calculation as the listing map.
 
 Existing environments must rerun `npm run seed:listings` from `backend` after
-demo listing locations change. The seeder updates the matching records by
-`seedId`, which keeps stored listing coordinates aligned with this snapshot.
-
-Set `VITE_MAPTILER_KEY` in the frontend environment to enable MapTiler raster tiles on Browse Results. When the key is omitted, Browse Results uses OpenStreetMap tiles so local builds and CI are not blocked. The Listing Details map uses OpenStreetMap tiles directly and requires no map key.
-
-Configure the MapTiler key in the frontend deployment environment only. Because Vite embeds browser environment variables at build time, redeploy the frontend after adding or changing `VITE_MAPTILER_KEY`.
+demo listing locations change. The seeder updates matching records by `seedId`
+so their stored coordinates stay aligned with the bundled snapshot.
 
 ## Environment Variables
 
-Environment examples are provided in:
+Placeholder-only templates are committed at [`backend/.env.example`](backend/.env.example) and [`frontend/.env.example`](frontend/.env.example).
 
-- `frontend/.env.example`
-- `backend/.env.example`
+### Backend
 
-Do not commit real `.env` files, MongoDB URIs, API keys, passwords, or production environment values. Deployment providers should store production environment variables in their own environment settings.
+| Variable | Requirement | Purpose |
+| --- | --- | --- |
+| `MONGO_URI` | Required | MongoDB connection string. |
+| `MONGODB_URI` | Alternative | Backward-compatible alternative to `MONGO_URI`. |
+| `JWT_SECRET` | Required for accounts | Signs and verifies login tokens. |
+| `OPENROUTER_API_KEY` | Required for AI | Server-only OpenRouter credential. |
+| `OPENROUTER_MODEL` | Optional | Structured-output model slug; defaults to `openai/gpt-4o-mini`. |
+| `PORT` | Optional | Local server port; deployment providers may set it. |
+| `FRONTEND_URL` | Production/custom origins | One additional allowed CORS origin. |
+| `FRONTEND_URLS` | Optional | Comma-separated additional allowed CORS origins. |
 
-## CI/CD
+### Frontend
 
-GitHub Actions is configured in `.github/workflows/ci.yml` for pushes to `main` and pull requests targeting `main`.
+| Variable | Requirement | Purpose |
+| --- | --- | --- |
+| `VITE_API_URL` | Required outside matching defaults | Express API base URL. |
+| `VITE_MAPTILER_KEY` | Optional | Protected browser key for MapTiler result-map tiles; OpenStreetMap is the fallback. |
 
-The workflow validates:
+Never place `MONGO_URI`, `MONGODB_URI`, `JWT_SECRET`, or `OPENROUTER_API_KEY` in a `VITE_` variable.
 
-- Frontend dependency installation with `npm ci`
-- Frontend linting with `npm run lint`
-- Frontend production build with `npm run build`
-- Backend dependency installation with `npm ci`
-- Backend syntax validation with `npm run check`
+## Tests, Lint, and Build
 
-The backend validation does not start the Express server and does not require a live MongoDB connection, so CI can run without committing or exposing database credentials.
+Run backend verification from `backend/`:
 
-## Sprint 3 Demo Scenarios
+```bash
+npm test
+npm run check
+```
 
-Commute validation scenarios are documented in [`docs/sprint-3-commute-validation-scenarios.md`](docs/sprint-3-commute-validation-scenarios.md). These scenarios show how commute time affects ranking, filtering, Value Score, recommendations, and comparison during the Sprint 3 review.
+After configuring OpenRouter, `npm run check:ai` validates the key/model format without making a paid provider request or printing the key. `npm run check:indexes` connects to MongoDB and verifies indexes. The backend has no separate lint script; `npm run check` is its syntax-validation command.
 
-## Listing Image Assets
+Run frontend verification from `frontend/`:
 
-The listing image schema, fallback behavior, asset conventions, seed workflow,
-and source policy are documented in
-[`docs/listing-images.md`](docs/listing-images.md).
+```bash
+npm test
+npm run lint
+npm run build
+```
 
-## Deployment Notes
+From the repository root, use `git diff --check` before submitting changes. GitHub Actions repeats frontend install/lint/test/build and backend install/check/test for pushes and pull requests targeting `main`.
 
-The production frontend is deployed on Vercel:
+## Public Deployment / Running the System
 
-- Frontend: <https://frontend-navy-one-si4pieuraf.vercel.app>
-- Backend API: <https://toronto-student-housing-backend.vercel.app>
+Production uses two Vercel projects from this repository:
 
-The frontend Vercel project must use `frontend` as its root directory, `npm run build` as the build command, and `dist` as the output directory. Set `VITE_API_URL` to the deployed backend API URL so the frontend can communicate with the deployed Express service.
+1. The backend project uses `backend` as its root directory and [`backend/vercel.json`](backend/vercel.json) to route requests to Express.
+2. The frontend project uses `frontend` as its root directory, `npm run build` as its build command, and `dist` as its output directory. [`frontend/vercel.json`](frontend/vercel.json) rewrites SPA routes to `index.html`.
+3. MongoDB Atlas must provide a database user and network access that permits connections from the backend deployment.
+4. Backend environment settings must contain the MongoDB URI and JWT secret. OpenRouter settings are required for the two AI features. Configure `FRONTEND_URL` or `FRONTEND_URLS` for any new/custom frontend origin.
+5. Frontend environment settings must set `VITE_API_URL` to the deployed backend URL. `VITE_MAPTILER_KEY` is optional.
+6. Redeploy after changing any frontend `VITE_` variable because Vite embeds it at build time.
 
-The backend can be deployed to Vercel with `backend/vercel.json`, or to Render or a similar Node/Express hosting provider. Production `MONGO_URI` and `JWT_SECRET` must be configured in the deployment provider's environment settings and must not be committed to GitHub. Existing local setups that use `MONGODB_URI` are also supported.
+Complete provider setup, verification, and alternative Render instructions are in [Project Closure Artifacts](docs/PROJECT_CLOSURE.md#public-deployment--running-the-system).
 
-## Issue Completion Note
+## Demo / Test Account
 
-This deployment and CI/CD preparation completes GitHub Issue #9 for the Sprint 1 technical foundation milestone.
+```text
+Name: Demo Account
+Email: tshm.demo@gmail.com
+Password: Thsm@123
+```
+
+A dedicated demonstration account is provided for instructor testing. These credentials are intended only for evaluation of the deployed application.
+
+## Security and Data Notes
+
+- Real `.env` files are ignored; only placeholder `.env.example` files belong in Git.
+- API keys, MongoDB credentials, JWT secrets, personal passwords, and authentication tokens must remain in local or deployment-provider environment settings.
+- Passwords are hashed before storage, and authenticated API routes require a bearer token.
+- Public collection sharing uses an opaque token and does not expose the owning user.
+- Housing, safety, commute, image, and nearby-place records are course-project demonstration data. Users should independently verify a property, route, schedule, cost, and neighbourhood before making a housing decision.
+
+## Additional Documentation
+
+- [Technical Documentation](docs/TECHNICAL_DOCUMENTATION.md)
+- [Project Closure Artifacts](docs/PROJECT_CLOSURE.md)
+- [Listing Image Guide](docs/listing-images.md)
+- [Sprint 3 Commute Validation Scenarios](docs/sprint-3-commute-validation-scenarios.md)

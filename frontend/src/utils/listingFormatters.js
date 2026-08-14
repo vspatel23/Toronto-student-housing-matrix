@@ -117,27 +117,35 @@ export const getAmenities = (listing) =>
     : [];
 
 export const getCommuteMinutes = (listing, campus) => {
-  if (!Array.isArray(listing?.commuteEstimates)) {
+  const normalizedCampus = normalizeCampusName(campus);
+
+  if (!Array.isArray(listing?.commuteEstimates) || !normalizedCampus) {
     return null;
   }
 
-  const normalizedCampus = normalizeCampusName(campus);
-  let commute;
+  const exactMatch = listing.commuteEstimates.find(
+    (estimate) =>
+      normalizeCampusName(estimate?.campus) === normalizedCampus,
+  );
+  const compatibleMatches = exactMatch
+    ? []
+    : listing.commuteEstimates.filter(
+        (estimate) => isMatchingCampusName(estimate?.campus, campus),
+      );
+  const commute =
+    exactMatch ||
+    (compatibleMatches.length === 1 ? compatibleMatches[0] : null);
 
-  if (normalizedCampus) {
-    commute = listing.commuteEstimates.find(
-      (estimate) => isMatchingCampusName(estimate?.campus, campus),
-    );
-
-    if (!commute) {
-      return null;
-    }
-  } else {
-    commute = listing.commuteEstimates[0];
+  if (!commute || !hasValue(commute.minutes)) {
+    return null;
   }
 
   const minutes = Number(commute?.minutes);
-  return Number.isFinite(minutes) && minutes >= 0 ? minutes : null;
+  return typeof commute.minutes !== "boolean" &&
+    Number.isFinite(minutes) &&
+    minutes >= 0
+    ? minutes
+    : null;
 };
 
 export const formatCommute = (listing, campus) => {
